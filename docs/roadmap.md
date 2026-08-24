@@ -5,7 +5,7 @@ phase are in [`architecture/`](architecture); decisions behind each choice
 are in [`adr/`](adr).
 
 ## Phase 0 — Scaffolding
-- [ ] Monorepo setup (npm workspaces, TypeScript project references)
+- [ ] Monorepo setup (pnpm workspaces, TypeScript project references)
 - [ ] ESLint / Prettier config
 - [ ] Package boundary rule (lint rule or dependency-cruiser) forbidding
       `domain-*` from importing `infra-*` / `providers-*`
