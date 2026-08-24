@@ -46,3 +46,7 @@ expose an HTTP/queue entrypoint. Full detail in
   "common" types there, which would re-couple contexts through the back
   door. `shared-kernel` is scoped to truly universal value objects
   (`TenantId`, `Channel`, `DeliveryStatus`) only.
+- The import-direction rule alone doesn't tell you which side new logic
+  belongs on — see ["Where does new logic belong?"](../architecture/domain-model.md#where-does-new-logic-belong)
+  in `domain-model.md` for the applied test (does it change for a business
+  reason or a technology reason?) and worked examples.

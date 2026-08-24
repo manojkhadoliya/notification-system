@@ -99,3 +99,28 @@ infra-*, providers-*  ──implements──┘
 
 This is enforced going forward with a lint rule / dependency-cruiser config
 in Phase 0, so the boundary can't silently erode as the codebase grows.
+
+## Where does new logic belong?
+
+The dependency-direction rule says *imports* aren't allowed to cross the
+`services/*` → `domain-*` ← `infra-*`/`providers-*` boundary the wrong way.
+It doesn't by itself tell you which side a new piece of logic belongs on.
+Use this test:
+
+> **If it would change because a business rule changed, it belongs in
+> `domain-*`. If it would only change because a technology choice changed,
+> it belongs in `infra-*`/`providers-*`. `services/*` shouldn't need to
+> change for either reason** — only when a new endpoint/queue is added or
+> the DI wiring changes.
+
+| Question | Where it's answered | Why |
+|---|---|---|
+| "Is this tenant within its SMS rate limit right now?" | `domain-notification`'s dispatch service asks the `RateLimiter` port | The *decision to check*, and what to do on failure (retry vs. reject), is business logic. The Redis token-bucket mechanics behind the port are infra. |
+| "Should this recipient be skipped for quiet hours?" | `domain-preferences` | Pure domain rule |
+| "How many times do we retry before DLQ?" | `RetryPolicy` in `domain-notification` | Business policy, not a broker setting |
+| "Parse the queue message, look up the request, call dispatch()" | `services/worker-sms` | Mechanical glue — no decision-making |
+| "What table does `DeliveryAttempt` live in?" | `infra-postgres` | Infra detail, invisible to domain |
+
+A `services/*` composition root that starts making decisions (branching on
+a business condition rather than just wiring/routing) is a sign logic
+leaked out of `domain-*` and needs to move back.
