@@ -16,7 +16,7 @@ Client / API consumer
       │  (API key auth, Idempotency-Key header)
       ▼
  ┌─────────────┐     ┌──────────────┐
- │  API Gateway │────▶│  PostgreSQL  │  via NotificationRepository port →
+ │ API Service  │────▶│  PostgreSQL  │  via NotificationRepository port →
  │  (Fastify)   │     └──────────────┘  infra-postgres adapter. Outbox row
  └─────────────┘                        written in the same transaction.
       │  outbox relay publishes via MessageBroker port
@@ -50,9 +50,9 @@ Client / API consumer
 
 | Component | Responsibility | Depends on (ports) |
 |---|---|---|
-| `apps/api` | Accept notification requests, expose status/preferences endpoints, relay outbox to broker | `NotificationRepository`, `PreferenceRepository`, `MessageBroker`, `IdempotencyStore`, `RateLimiter` |
-| `apps/worker-sms` | Consume `sms.*` queue, run dispatch, call SMS provider | `NotificationRepository`, `PreferenceRepository`, `RateLimiter`, `SmsGateway` |
-| `apps/worker-push` | Consume `push.*` queue, run dispatch, call push provider | `NotificationRepository`, `PreferenceRepository`, `RateLimiter`, `PushGateway` |
+| `services/api` | Accept notification requests, expose status/preferences endpoints, relay outbox to broker | `NotificationRepository`, `PreferenceRepository`, `MessageBroker`, `IdempotencyStore`, `RateLimiter` |
+| `services/worker-sms` | Consume `sms.*` queue, run dispatch, call SMS provider | `NotificationRepository`, `PreferenceRepository`, `RateLimiter`, `SmsGateway` |
+| `services/worker-push` | Consume `push.*` queue, run dispatch, call push provider | `NotificationRepository`, `PreferenceRepository`, `RateLimiter`, `PushGateway` |
 | `domain-notification` | NotificationRequest/DeliveryAttempt entities, dispatch orchestration, retry policy, defines repository/broker/gateway ports | none (pure domain) |
 | `domain-preferences` | Recipient/Preference entities, quiet-hours logic, defines `PreferenceRepository` port | none (pure domain) |
 | `domain-identity` | Tenant/ApiKey entities, rate-limit policy | none (pure domain) |
@@ -67,8 +67,8 @@ Client / API consumer
 - **Structured logging** — every request/attempt carries a correlation id
   (the `NotificationRequest` id) through API → queue → worker → provider
   call, for traceability across process boundaries.
-- **Metrics** — each app exposes a `/metrics` endpoint (Prometheus format),
-  added in Phase 3.
+- **Metrics** — each service exposes a `/metrics` endpoint (Prometheus
+  format), added in Phase 3.
 - **Idempotency** — `Idempotency-Key` header deduplicated via
   `IdempotencyStore` (Redis) before a request is persisted.
 - **Rate limiting** — token bucket per tenant/channel via `RateLimiter`

@@ -5,7 +5,7 @@ Implements the repository ports defined by `domain-notification`,
 `PreferenceRepository`, `TenantRepository`, `ApiKeyRepository`, ...) using
 Prisma against PostgreSQL. Owns the Prisma schema, modeled per bounded
 context (see [`../../docs/architecture/data-model.md`](../../docs/architecture/data-model.md)),
-and the transactional outbox write path used by `apps/api`.
+and the transactional outbox write path used by `services/api`.
 
 Depends on the `domain-*` packages (to implement their port interfaces);
 never the reverse.

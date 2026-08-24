@@ -85,15 +85,15 @@ not read the preferences table directly.
 ## Rule: dependency direction
 
 ```
-apps/*  ──depends on──▶  domain-*  (ports + entities)
-                              ▲
+services/*  ──depends on──▶  domain-*  (ports + entities)
+                                  ▲
 infra-*, providers-*  ──implements──┘
 ```
 
 - `domain-*` packages import nothing from `infra-*` or `providers-*`.
 - `infra-*` / `providers-*` packages import a `domain-*` package to
   implement its port interfaces.
-- `apps/*` packages are composition roots: they import both a domain
+- `services/*` packages are composition roots: they import both a domain
   package and the infra/provider adapters that implement its ports, and
   wire them together (dependency injection) at startup.
 

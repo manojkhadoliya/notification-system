@@ -2,7 +2,7 @@
 
 The **Identity & Tenancy** bounded context. Owns `Tenant` and `ApiKey`
 entities and the `RateLimitPolicy`. Defines `TenantRepository`,
-`ApiKeyRepository`, and `RateLimiter` ports, used by `apps/api` for
+`ApiKeyRepository`, and `RateLimiter` ports, used by `services/api` for
 authentication and by every worker for rate-limit enforcement at dispatch
 time.
 

@@ -19,10 +19,11 @@ Organize the system into bounded contexts (`domain-notification`,
 owning its entities, value objects, and **ports** (interface definitions
 for anything the domain needs from the outside world — persistence,
 messaging, external providers). Infrastructure packages (`infra-*`,
-`providers-*`) depend on a domain package to implement its ports. Apps
-(`apps/*`) are thin composition roots that wire a domain package to
-concrete adapters via dependency injection and expose an HTTP/queue
-entrypoint. Full detail in
+`providers-*`) depend on a domain package to implement its ports. Services
+(`services/*` — every one of them a backend process: an HTTP server or a
+queue-consumer worker, never a frontend) are thin composition roots that
+wire a domain package to concrete adapters via dependency injection and
+expose an HTTP/queue entrypoint. Full detail in
 [`domain-model.md`](../architecture/domain-model.md).
 
 ## Rationale
