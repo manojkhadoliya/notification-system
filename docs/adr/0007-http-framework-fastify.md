@@ -4,14 +4,14 @@
 Accepted
 
 ## Context
-`apps/api` is the ingress for `POST/GET /v1/notifications` and the
+`services/api` is the ingress for `POST/GET /v1/notifications` and the
 preference endpoints (see [`api-spec.md`](../architecture/api-spec.md)).
 Two separate questions needed deciding: (1) does it run as a long-lived
 server process or as Lambda functions behind a managed API Gateway, and (2)
 if it's a long-lived process, which Node HTTP framework.
 
 ## Decision
-`apps/api` runs as a long-lived Fastify process, deployed as a container —
+`services/api` runs as a long-lived Fastify process, deployed as a container —
 the same container image locally (Docker Compose) and on the Phase 1.5
 free-tier host.
 
@@ -22,7 +22,7 @@ free-tier host.
   Phase 1 targets `docker compose up` locally and Fly.io/Railway for the
   hosted demo — both run containers, not Lambda. Building for API Gateway
   now would make local dev and the hosted demo diverge from day one.
-- **Connection-heavy workload.** `apps/api` holds a Postgres pool and talks
+- **Connection-heavy workload.** `services/api` holds a Postgres pool and talks
   to RabbitMQ and Redis per request. Lambda's per-invocation lifecycle
   fights connection pooling (cold starts, connection exhaustion under
   concurrency) — solvable, but only with extra AWS-specific machinery paid
@@ -78,6 +78,6 @@ free-tier host.
   denominator framework recognition.
 - If AWS API Gateway's edge features (WAF, custom domains, usage plans) are
   wanted later, they can be added in front of the existing Fastify
-  container on ALB/ECS Fargate (Phase 4) without changing `apps/api` code —
+  container on ALB/ECS Fargate (Phase 4) without changing `services/api` code —
   this decision does not foreclose that option, it just doesn't build for
   it now.

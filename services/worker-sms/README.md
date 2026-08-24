@@ -1,4 +1,4 @@
-# apps/worker-sms
+# services/worker-sms
 
 Consumes the `sms.notify` queue and dispatches SMS notifications. A
 **composition root**: wires the `domain-notification` dispatch service

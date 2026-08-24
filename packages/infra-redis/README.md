@@ -1,9 +1,9 @@
 # packages/infra-redis
 
 Implements the `RateLimiter` (token bucket, per tenant/channel) and
-`IdempotencyStore` ports, using Redis. Used by `apps/api` (idempotency
-check + ingest-time rate limiting) and by `apps/worker-sms`/
-`apps/worker-push` (dispatch-time rate limiting).
+`IdempotencyStore` ports, using Redis. Used by `services/api` (idempotency
+check + ingest-time rate limiting) and by `services/worker-sms`/
+`services/worker-push` (dispatch-time rate limiting).
 
 Depends on `domain-identity` (`RateLimiter` port) and `domain-notification`
 (`IdempotencyStore` port); never the reverse.

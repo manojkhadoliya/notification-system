@@ -24,9 +24,9 @@ are in [`adr/`](adr).
 - [ ] `infra-redis`: `RateLimiter` + `IdempotencyStore` adapters
 - [ ] `providers-sms`: Twilio adapter + mock adapter (env-toggled)
 - [ ] `providers-push`: FCM adapter + mock adapter (env-toggled)
-- [ ] `apps/api`: `POST/GET /v1/notifications`, `GET/PUT /v1/preferences`,
+- [ ] `services/api`: `POST/GET /v1/notifications`, `GET/PUT /v1/preferences`,
       outbox relay
-- [ ] `apps/worker-sms`, `apps/worker-push`: consume queue, run dispatch
+- [ ] `services/worker-sms`, `services/worker-push`: consume queue, run dispatch
       service, retry + backoff + circuit breaker
 - [ ] Unit tests: domain services, adapters
 - [ ] Integration tests: API → queue → worker → mock provider
@@ -41,9 +41,9 @@ are in [`adr/`](adr).
 - [ ] `domain-templates` bounded context (Template, TemplateVersion,
       Locale)
 - [ ] `providers-email`: SES/SendGrid adapter + mock adapter
-- [ ] `apps/worker-email`
+- [ ] `services/worker-email`
 - [ ] In-app: WebSocket gateway (Socket.io), notification feed API
-      (list/read/unread), `apps/worker-inapp`
+      (list/read/unread), `services/worker-inapp`
 - [ ] Template management API + Handlebars rendering
 
 ## Phase 3 — Reliability & observability polish

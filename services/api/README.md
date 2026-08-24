@@ -1,4 +1,4 @@
-# apps/api
+# services/api
 
 Fastify HTTP API — the entry point for notification requests and
 preference management. A **composition root**: contains no business logic

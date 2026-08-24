@@ -30,8 +30,12 @@ see [`docs/roadmap.md`](docs/roadmap.md) for the build plan.
 
 ## Repo layout
 
+`services/` holds every deployable backend process in this system (an HTTP
+server and queue-consumer workers) — there is no frontend in this project,
+so "service" is used throughout instead of the more ambiguous "app."
+
 ```
-apps/               composition roots (HTTP API, queue workers) — DI wiring only
+services/           composition roots (HTTP API, queue workers) — DI wiring only
 packages/
   domain-*/          bounded-context domain models + ports, zero infra deps
   infra-*/            adapters implementing domain ports (Postgres, RabbitMQ, Redis)
@@ -41,8 +45,8 @@ infra/               local infrastructure (docker-compose)
 docs/                architecture docs and ADRs
 ```
 
-Each `apps/*` and `packages/*` folder has its own `README.md` describing its
-responsibility and which phase brings it to life.
+Each `services/*` and `packages/*` folder has its own `README.md` describing
+its responsibility and which phase brings it to life.
 
 ## Tech stack (planned)
 

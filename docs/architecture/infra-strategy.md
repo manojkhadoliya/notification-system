@@ -13,7 +13,7 @@ is accessed by domain/application code only through a port interface
 defined in a `domain-*` package (see
 [`domain-model.md`](domain-model.md)). Concrete infrastructure lives in
 `infra-*` / `providers-*` packages that implement those ports, and gets
-wired in at the composition root (`apps/*`) via configuration. Swapping an
+wired in at the composition root (`services/*`) via configuration. Swapping an
 implementation — a different Postgres host, a different broker, a
 different SMS provider — means writing or selecting a new adapter and
 changing wiring/env vars. It never means touching `domain-*` code.

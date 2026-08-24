@@ -8,7 +8,7 @@ two adapters, selected by env config:
   a Twilio account or any cost.
 
 Also owns the `POST /v1/webhooks/twilio` signature verification logic used
-by `apps/api` to confirm delivery status callbacks.
+by `services/api` to confirm delivery status callbacks.
 
 Depends on `domain-notification` (to implement its port interface); never
 the reverse.
