@@ -5,15 +5,21 @@
 Every entity in every bounded context is scoped by `tenantId` (owned by the
 Identity & Tenancy context, referenced by id from the others — see
 [`domain-model.md`](domain-model.md)). A single shared Postgres database
-(identity, preferences) and a single Kafka cluster + Cassandra cluster
-(notification delivery) serve all tenants in Phase 1 (pooled/shared
-infrastructure, not one stack per tenant) — appropriate for a portfolio
-demo; the ports/adapters boundary means a move to per-tenant isolation
-later is an infra-layer change, not a domain rewrite. `tenantId` is also the
-Kafka partition key for notification topics (see
-[`messaging.md`](messaging.md)), so per-tenant throughput isolation and the
-elastic scale-out story from [ADR 0008](../adr/0008-elastic-scale-data-plane.md)
-share the same key, not two separate mechanisms.
+(identity, preferences, templates) and a single Kafka cluster + Cassandra
+cluster (notification delivery) serve all tenants — pooled/shared
+infrastructure, not one stack per tenant. This is deliberate, not just a
+Phase 1 simplification: the pooled model is what lets user-count growth
+(illustratively, ~100 users to ~1,000,000 over 3-4 years — see
+[`scaling-strategy.md`](scaling-strategy.md)) be absorbed by adding capacity
+to the shared infrastructure rather than provisioning new infrastructure
+per tenant. Per-tenant isolation, if ever needed (e.g. for a compliance
+requirement), remains an infra-layer change behind the same ports — not a
+domain rewrite.
+
+Notification-topic partitioning uses `recipientId`, not `tenantId` — see
+[`scaling-strategy.md`](scaling-strategy.md#why-the-kafka-partition-key-is-recipientid-not-tenantid)
+for why a tenant-keyed partition would cap a single large tenant's
+throughput regardless of total partition count.
 
 ## Auth
 
@@ -48,11 +54,19 @@ share the same key, not two separate mechanisms.
   free demo tenants) without changing the enforcement mechanism.
 - Exceeding the limit at ingest returns `429`; exceeding it at dispatch
   time re-queues the message with backoff rather than dropping it.
+- **Known scaling edge case:** a `(tenantId, channel)` token-bucket key is a
+  single Redis key, so an extremely high-volume tenant concentrates its
+  rate-limit checks on one Redis Cluster shard. Not a problem at the growth
+  curve this system is designed against (see
+  [`scaling-strategy.md`](scaling-strategy.md)); flagged there as an
+  identified, not-yet-built mitigation (sharded sub-buckets) rather than
+  silently assumed away.
 
 ## Why this matters for the portfolio goal
 
 Multi-tenancy, idempotency, and rate limiting are the parts of a
 notification system that are easy to skip in a toy version but are exactly
 what makes a real one hard — they're included from Phase 1 specifically to
-demonstrate that judgment, scoped to the two Phase 1 channels rather than
+demonstrate that judgment, applied uniformly across all four channels
+(see [ADR 0004](../adr/0004-phased-channel-rollout.md)) rather than
 gold-plating features not yet needed.

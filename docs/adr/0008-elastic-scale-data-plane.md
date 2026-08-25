@@ -14,13 +14,15 @@ Postgres primary tops out somewhere in the thousands-to-low-tens-of-
 thousands of transactions/sec, and RabbitMQ's per-message routing model
 doesn't horizontally partition the way a log does.
 
-The requirement isn't a literal sustained "millions of notifications per
-second" — it's that the architecture should absorb a **large traffic peak**
-using the pattern real notification/messaging platforms use in industry:
-scale out horizontally during a burst, scale back in when it passes, without
-an infrastructure redesign at the moment it's needed. A single-writer
-relational primary can't do that no matter how it's tuned; scaling it means
-changing what it *is*, not how big it is.
+The requirement isn't a fixed peak-throughput number — it's that the
+architecture should absorb **user-count growth** (illustratively, ~100
+users at launch to on the order of 1,000,000 over 3-4 years — see
+[`scaling-strategy.md`](../architecture/scaling-strategy.md) for the full
+growth curve and per-component headroom analysis) the way real
+notification/messaging platforms do in industry: scale out horizontally as
+usage grows, without an infrastructure redesign at the moment it's needed.
+A single-writer relational primary can't do that no matter how it's tuned —
+scaling it means changing what it *is*, not how big it is.
 
 ## Decision
 For the `domain-notification` bounded context (the hot path — every
@@ -34,10 +36,15 @@ notification send touches it):
 2. **The transactional outbox is retired for this context.** The outbox
    pattern exists solely to solve the dual-write problem between Postgres
    and a broker. Kafka becomes the durable log of record instead: the API
-   produces directly to Kafka with an idempotent producer keyed on
-   `(tenantId, idempotencyKey)`, and Kafka's own replication is the
-   durability guarantee. There is no second system to keep in sync, so
-   there's no dual-write problem left to solve.
+   deduplicates at the application level via `IdempotencyStore`
+   (`tenantId` + `idempotencyKey`, see
+   [`multi-tenancy.md`](../architecture/multi-tenancy.md)) and then produces
+   directly to Kafka with the client's idempotent-producer mode enabled
+   (Kafka's own duplicate-write protection against producer-side retries —
+   a broker-session mechanism, distinct from the application-level dedup
+   key). Kafka's replication is the durability guarantee; there is no
+   second system to keep in sync, so there's no dual-write problem left to
+   solve.
 3. **`NotificationRepository` (the read/status side) is backed by a
    wide-column store (Cassandra or ScyllaDB — wire-compatible, pick either)
    via a new `infra-cassandra` package**, populated by consumer processes
@@ -105,7 +112,8 @@ gap.
 ## Consequences
 - New/renamed packages: `infra-kafka` (renamed from `infra-rabbitmq`),
   new `infra-cassandra`. `infra-postgres`'s scope narrows to
-  `domain-identity` and `domain-preferences` only.
+  `domain-identity`, `domain-preferences`, and `domain-templates` — every
+  Postgres-backed context except the notification-delivery hot path.
 - [`messaging.md`](../architecture/messaging.md) rewritten for Kafka
   topics/partitions/consumer groups/retry-topics, replacing the
   exchange/queue/DLX topology.
@@ -131,3 +139,13 @@ gap.
   consumer groups), not by a benchmark number — the Phase 1 load test
   (`roadmap.md`) demonstrates the scale-out mechanism working, not a
   specific throughput target.
+- The Kafka topic partition key is `recipientId`, not `tenantId` — a single
+  large tenant's traffic would otherwise be capped at one partition's
+  throughput regardless of total partition count. See
+  [`scaling-strategy.md`](../architecture/scaling-strategy.md#why-the-kafka-partition-key-is-recipientid-not-tenantid)
+  for why, and [`messaging.md`](../architecture/messaging.md) for the topic
+  layout.
+- [`scaling-strategy.md`](../architecture/scaling-strategy.md) is the
+  full per-component growth story (this ADR covers *why* Kafka+Cassandra;
+  that doc covers *how every layer, including the Postgres-backed
+  contexts, absorbs growth without redesign*).
