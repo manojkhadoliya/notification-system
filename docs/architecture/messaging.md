@@ -19,10 +19,10 @@ never meant to be a system of record.
 ## Topic layout
 
 ```
-topic: sms.notify        (N partitions, keyed by tenantId)
-topic: push.notify       (N partitions, keyed by tenantId)
-topic: email.notify      (N partitions, keyed by tenantId)
-topic: in_app.notify     (N partitions, keyed by tenantId)
+topic: sms.notify        (N partitions, keyed by recipientId)
+topic: push.notify       (N partitions, keyed by recipientId)
+topic: email.notify      (N partitions, keyed by recipientId)
+topic: in_app.notify     (N partitions, keyed by recipientId)
 
 Retry, per channel, one topic per backoff tier (replaces RabbitMQ's
 per-queue TTL + dead-letter exchange):
@@ -36,19 +36,27 @@ per-queue TTL + dead-letter exchange):
 `worker-*` following the SMS/Push/Email pattern exactly — see "In-app is
 structurally different" below.
 
-Partitioning by `tenantId` keeps all of one tenant's messages in order on
-one partition (useful for debugging and per-tenant rate reasoning) while
-still allowing the topic to scale out by adding partitions and consumers as
-tenant count/volume grows — this is the mechanism behind "scale out during a
-peak without a redesign."
+Partitioned by `recipientId`, not `tenantId`: this keeps one recipient's
+messages in order on one partition (the ordering guarantee that actually
+matters), while spreading a single large tenant's traffic across many
+partitions automatically, since that tenant's own recipients already hash
+to different keys. Partitioning by `tenantId` instead would cap a large
+tenant's throughput at one partition's capacity no matter how many
+partitions the topic has — see
+[`scaling-strategy.md`](scaling-strategy.md#why-the-kafka-partition-key-is-recipientid-not-tenantid)
+for the full reasoning. This is the mechanism behind "scale out with user
+growth without a redesign."
 
 ## Message flow
 
-1. API validates the request (auth, rate limit, idempotency check via
-   `IdempotencyStore`) and produces directly to `<channel>.notify` with an
-   **idempotent producer** keyed on `(tenantId, idempotencyKey)`. There is no
-   Postgres write in this path and no outbox relay — Kafka's replication
-   *is* the durability guarantee (see [ADR 0008](../adr/0008-elastic-scale-data-plane.md)).
+1. API validates the request (auth, rate limit, application-level dedup via
+   `IdempotencyStore` on `tenantId` + `idempotencyKey`) and produces
+   directly to `<channel>.notify`, keyed by `recipientId`, with the Kafka
+   client's idempotent-producer mode enabled (guards against duplicate
+   writes from producer-side retries — a broker-session mechanism, separate
+   from the application-level dedup key above). There is no Postgres write
+   in this path and no outbox relay — Kafka's replication *is* the
+   durability guarantee (see [ADR 0008](../adr/0008-elastic-scale-data-plane.md)).
 2. A projection consumer reads `<channel>.notify` and writes the initial
    `NotificationRequest` row (status `accepted`) into the Cassandra-backed
    read model via `NotificationRepository`.
@@ -92,6 +100,7 @@ in `domain-preferences` before the message reached this topic.
 {
   "notificationRequestId": "uuid",
   "tenantId": "uuid",
+  "recipientId": "uuid",
   "channel": "sms",
   "idempotencyKey": "string",
   "attemptNumber": 1

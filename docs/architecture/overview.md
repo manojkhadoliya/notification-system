@@ -28,16 +28,16 @@ Client / API consumer
       │  (API key auth, Idempotency-Key header)
       ▼
  ┌─────────────┐   idempotency check via IdempotencyStore (Redis)
- │ API Service  │   auth/rate-limit check via infra-postgres (identity)
- │  (Fastify)   │
+ │ API Service  │   auth check via infra-postgres (identity), Redis
+ │  (Fastify)   │   read-through cached — see scaling-strategy.md
  └─────────────┘
-      │  produces directly via MessageBroker port (idempotent producer,
-      │  keyed on tenantId + idempotencyKey) — no outbox, no relay
+      │  dedup via IdempotencyStore, then produces via MessageBroker
+      │  port (keyed by recipientId) — no outbox, no relay
       ▼
  ┌───────────────────────────────────────┐
  │          infra-kafka adapter           │
  │  topic: sms.notify / push.notify      │
- │  (N partitions, keyed by tenantId)    │
+ │  (N partitions, keyed by recipientId) │
  │  + retry-tier topics + DLQ topic      │
  │  per channel                          │
  └───────────────────────────────────────┘
@@ -46,11 +46,14 @@ Client / API consumer
  ┌───────────┐       ┌───────────┐       ┌──────────────┐
  │ SMS Worker│       │Push Worker│       │  Projection  │  domain dispatch:
  │(composition│      │(composition│      │  consumer     │  preference check
- │   root)    │      │   root)    │      │  (composition │  (infra-postgres) →
- └───────────┘       └───────────┘       │     root)     │  rate limit (Redis) →
-      │                    │             └──────────────┘  gateway port → persist
-      ▼                    ▼                    │          attempt (retry +
- SmsGateway port      PushGateway port           ▼          backoff + breaker)
+ │   root)    │      │   root)    │      │  (composition │  (Redis-cached,
+ └───────────┘       └───────────┘       │     root)     │  infra-postgres
+      │                    │             └──────────────┘  behind) → rate
+      ▼                    ▼                    │          limit (Redis) →
+ SmsGateway port      PushGateway port           ▼          gateway port →
+                                                             persist attempt
+                                                             (retry + backoff
+                                                             + breaker)
  → providers-sms       → providers-push   ┌──────────────┐
  (Twilio | mock)        (FCM | mock)      │  Cassandra   │  NotificationRequest /
       └────────┬───────────┘              │(infra-cassandra)│ DeliveryAttempt
@@ -103,6 +106,7 @@ the same "backend process" naming rule from
 
 See [`domain-model.md`](domain-model.md) for bounded contexts,
 [`data-model.md`](data-model.md) for persisted entities,
-[`messaging.md`](messaging.md) for the broker topology, and
+[`messaging.md`](messaging.md) for the broker topology,
 [`infra-strategy.md`](infra-strategy.md) for how this deploys locally and on
-free-tier hosting.
+free-tier hosting, and [`scaling-strategy.md`](scaling-strategy.md) for how
+every component absorbs user-count growth without a redesign.

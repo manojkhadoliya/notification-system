@@ -25,6 +25,8 @@ see [`docs/roadmap.md`](docs/roadmap.md) for the build plan.
   — tenant auth, idempotency, rate limiting
 - [`docs/architecture/infra-strategy.md`](docs/architecture/infra-strategy.md)
   — local-first / free-tier plan and future migration path
+- [`docs/architecture/scaling-strategy.md`](docs/architecture/scaling-strategy.md)
+  — how the system absorbs user-count growth without a redesign
 - [`docs/adr/`](docs/adr) — architecture decision records
 - [`docs/roadmap.md`](docs/roadmap.md) — phased build plan
 

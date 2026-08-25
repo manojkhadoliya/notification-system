@@ -22,12 +22,22 @@ changing wiring/env vars. It never means touching `domain-*` code.
 
 ```
 docker-compose.yml runs:
-  postgres   (official image — domain-identity, domain-preferences)
+  postgres   (official image — domain-identity, domain-preferences, domain-templates)
   cassandra  (official image, single node — domain-notification read model)
-  redis      (official image)
+  redis      (official image — rate limiting, idempotency, and the
+              read-through cache in front of postgres)
   kafka      (official image, KRaft mode — no separate Zookeeper needed)
-  api, worker-sms, worker-push (built from this repo)
+  api, worker-sms, worker-push, worker-email, worker-inapp,
+  projection-notification (built from this repo)
 ```
+
+PgBouncer (connection pooling — see
+[`scaling-strategy.md`](scaling-strategy.md#keeping-postgres-off-the-hot-path))
+isn't in the local compose stack: it's a scale lever with nothing to prove
+at single-developer local volume, the same reasoning
+[ADR 0008](../adr/0008-elastic-scale-data-plane.md) already applies to
+Kafka partition counts. It's added when the hosted/scaled deployment
+actually needs it, not before.
 
 Zero external accounts, zero cost, fastest iteration loop. This proves the
 pipeline is *correct* end-to-end (see
@@ -49,7 +59,7 @@ a paid/scaled equivalent:
 | Concern | Free tier (future) | Scaled equivalent (further future) | Migration effort |
 |---|---|---|---|
 | Compute | Fly.io / Railway free tier | AWS ECS Fargate | redeploy container image, no code change |
-| Postgres (identity, preferences) | Supabase or Neon free tier | AWS RDS | connection string swap (both are vanilla Postgres) |
+| Postgres (identity, preferences, templates) | Supabase or Neon free tier | AWS RDS (+ PgBouncer/RDS Proxy) | connection string swap (both are vanilla Postgres) |
 | Broker (notification delivery) | Upstash Kafka or Confluent Cloud free tier | Confluent Cloud (dedicated) / Amazon MSK | connection string + credentials swap (both speak the Kafka protocol) |
 | Wide-column store (notification delivery) | DataStax Astra DB free tier | Astra DB (paid) / self-hosted Scylla cluster | connection string swap (Astra is managed Cassandra) |
 | Cache | Upstash free tier | AWS ElastiCache | connection string swap (both are Redis-compatible) |
@@ -78,4 +88,5 @@ would be infrastructure work, not an application rewrite.
 
 See [ADR 0006](../adr/0006-local-first-free-tier-infra.md) and
 [ADR 0008](../adr/0008-elastic-scale-data-plane.md) for the decision
-records.
+records, and [`scaling-strategy.md`](scaling-strategy.md) for the
+user-growth curve this whole document's migration path is sized against.
