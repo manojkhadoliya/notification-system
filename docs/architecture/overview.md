@@ -1,5 +1,9 @@
 # Architecture Overview
 
+This is the detailed component view. For requirements, capacity estimation,
+and a summary of key decisions in one read, start with
+[`high-level-design.md`](high-level-design.md) instead.
+
 ## Goals
 
 - Demonstrate a realistic multi-channel notification pipeline (SMS, Push,

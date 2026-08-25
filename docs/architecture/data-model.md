@@ -140,3 +140,12 @@ even after the template is later edited.
   (Kafka + Cassandra via `infra-kafka`/`infra-cassandra`), per
   [ADR 0008](../adr/0008-elastic-scale-data-plane.md) — polyglot persistence
   chosen per context's access pattern, not a system-wide default.
+- **Retention:** `NotificationRequest`/`DeliveryAttempt`/`NotificationFeedItem`
+  grow without bound otherwise — Cassandra scales storage horizontally (see
+  [`scaling-strategy.md`](scaling-strategy.md)), but that's a cost lever, not
+  a reason to skip a policy. Planned: a TTL on these tables (e.g. 90 days),
+  after which a request's operational history ages out; nothing in
+  `domain-notification` depends on old rows existing, so this is a
+  config-level Cassandra TTL, not a domain change. Not yet sized to a
+  specific number — noted here so it isn't silently forgotten, per
+  [`high-level-design.md`](high-level-design.md)'s capacity estimate.

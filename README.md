@@ -11,8 +11,11 @@ see [`docs/roadmap.md`](docs/roadmap.md) for the build plan.
 
 ## Start here
 
-- [`docs/architecture/overview.md`](docs/architecture/overview.md) — system
-  diagram and component responsibilities
+- [`docs/architecture/high-level-design.md`](docs/architecture/high-level-design.md)
+  — **start here**: requirements, capacity estimation, high-level
+  architecture, and key decisions, end to end in one read
+- [`docs/architecture/overview.md`](docs/architecture/overview.md) — detailed
+  system diagram and component responsibilities
 - [`docs/architecture/domain-model.md`](docs/architecture/domain-model.md) —
   bounded contexts and ubiquitous language
 - [`docs/architecture/data-model.md`](docs/architecture/data-model.md) —
