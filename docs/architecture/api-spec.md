@@ -16,12 +16,16 @@ Accept a notification request for async dispatch.
 ```json
 {
   "recipientId": "uuid",
-  "channel": "sms | push",
+  "channel": "sms | push | email | in_app",
+  "templateVersionId": "uuid (optional)",
   "payload": {
     "message": "string"
   }
 }
 ```
+`payload` is either raw content (as above) or the variables a
+`templateVersionId` renders against — one or the other, not both. See
+[`domain-model.md`](domain-model.md#templates) for the Templates context.
 
 **Response — 202 Accepted**
 ```json
@@ -90,6 +94,46 @@ Update opt-in/out and quiet hours for a recipient.
 }
 ```
 
+## `POST /v1/templates`
+
+Create a template (name + channel). Returns the created `Template`.
+
+## `POST /v1/templates/:id/versions`
+
+Publish a new immutable version of a template.
+
+**Request body**
+```json
+{
+  "locale": "en-US",
+  "content": "Hello {{recipientName}}, your order {{orderId}} shipped."
+}
+```
+
+**Response — 201 Created**
+```json
+{
+  "id": "uuid (this is the templateVersionId used in POST /v1/notifications)",
+  "version": 3
+}
+```
+
+## `GET /v1/templates/:id`
+
+Return a template and its version history.
+
+## `GET /v1/feed/:recipientId`
+
+`in_app` channel only — list feed items, most recent first, from the
+`NotificationFeedItem` projection (see
+[`data-model.md`](data-model.md#templates)).
+
+**Query params:** `unreadOnly=true` (optional).
+
+## `POST /v1/feed/:recipientId/:notificationRequestId/read`
+
+Mark a feed item read (sets `NotificationFeedItem.read_at`).
+
 ## `POST /v1/webhooks/twilio`
 
 Delivery status callback from Twilio, used to move a `DeliveryAttempt` from
@@ -108,7 +152,8 @@ trusted.
 }
 ```
 
-## Out of scope for Phase 1
+## Out of scope
 
-Template endpoints, in-app feed endpoints, and email-specific fields are
-added in Phase 2 (see [`../roadmap.md`](../roadmap.md)).
+Webhook callbacks for Email/In-app delivery confirmation (only Twilio's is
+specified above); admin DLQ-replay endpoint. See
+[`../roadmap.md`](../roadmap.md) for what's tracked and when.

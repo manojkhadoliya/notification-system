@@ -120,7 +120,7 @@ gap.
   single-node Cassandra/Scylla still proves the pipeline is *correct*
   end-to-end. It cannot prove the *peak-throughput number* — demonstrating
   that would need real infrastructure to load-test, which stays out of
-  scope. Free-tier hosted equivalents exist for the Phase 1.5 demo
+  scope. Free-tier hosted equivalents exist for the future-work hosted demo
   (Confluent Cloud / Upstash Kafka; DataStax Astra for Cassandra), updated
   in [`infra-strategy.md`](../architecture/infra-strategy.md).
 - More upfront infrastructure to run even locally (two new moving parts
@@ -128,6 +128,6 @@ gap.
   structure itself was accepted: demonstrating this judgment is the point
   of the project.
 - Elastic peak-handling is proven by *design* (partition count + autoscaling
-  consumer groups), not by a benchmark number — the Phase 3 load test
+  consumer groups), not by a benchmark number — the Phase 1 load test
   (`roadmap.md`) demonstrates the scale-out mechanism working, not a
   specific throughput target.

@@ -14,12 +14,12 @@ acceptable — but it should still demonstrate infrastructure judgment
 appropriate to a system that might later need to scale.
 
 ## Decision
-Phase 1 runs entirely on local Docker Compose (Postgres, RabbitMQ, Redis).
-A subsequent Phase 1.5 hosts the same stack on free tiers of
-wire-compatible managed services (Fly.io/Railway, Supabase/Neon, CloudAMQP,
-Upstash). A paid, scaled AWS deployment (Terraform, ECS Fargate, RDS,
-ElastiCache, Amazon MQ) is documented as an optional future phase but not
-built. Full detail in
+Phase 1 — the single, full-channel build (see
+[ADR 0004](0004-phased-channel-rollout.md)) — runs entirely on local Docker
+Compose. A hosted free-tier demo on wire-compatible managed services, and a
+paid, scaled AWS deployment (Terraform), are both documented as future work
+but deliberately left unphased/uncommitted per ADR 0004 — channel breadth
+and deployment target are separate decisions. Full detail in
 [`infra-strategy.md`](../architecture/infra-strategy.md).
 
 ## Rationale
@@ -35,8 +35,8 @@ switching/scaling/migration in future."
 - Free tiers have real limits (connection counts, storage, uptime
   guarantees on some providers) — acceptable for a demo, called out
   explicitly so it's never mistaken for a production-ready deployment.
-- No infrastructure-as-code (Terraform) is written until Phase 4 is
-  actually undertaken; Phase 1.5's free-tier setup is expected to be
-  configured manually/via each provider's dashboard, documented in
-  `infra-strategy.md` rather than codified, since it may change providers
-  before Phase 4 is ever reached.
+- No infrastructure-as-code (Terraform) is written until the paid-cloud
+  future work is actually undertaken; the hosted free-tier demo's setup is
+  expected to be configured manually/via each provider's dashboard,
+  documented in `infra-strategy.md` rather than codified, since it may
+  change providers before that future work is ever reached.

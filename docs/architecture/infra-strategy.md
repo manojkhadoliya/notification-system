@@ -37,12 +37,16 @@ scale-out that decision is about; that needs real infrastructure to
 load-test, which stays out of scope here. This is the environment all
 Phase 1 development and testing targets.
 
-## Phase 1.5 — hosted free-tier demo
+## Future work (not phased) — hosted free-tier demo
 
-Same containers/services, moved to free tiers chosen specifically because
-each has a clear, well-trodden upgrade path to a paid/scaled equivalent:
+Deferred per [ADR 0004](../adr/0004-phased-channel-rollout.md) — channel
+breadth (all four channels, Phase 1) and deployment target (local vs.
+hosted) are separate decisions, and only the former is committed to right
+now. When this is picked up: same containers/services, moved to free tiers
+chosen specifically because each has a clear, well-trodden upgrade path to
+a paid/scaled equivalent:
 
-| Concern | Free tier (Phase 1.5) | Scaled equivalent (future) | Migration effort |
+| Concern | Free tier (future) | Scaled equivalent (further future) | Migration effort |
 |---|---|---|---|
 | Compute | Fly.io / Railway free tier | AWS ECS Fargate | redeploy container image, no code change |
 | Postgres (identity, preferences) | Supabase or Neon free tier | AWS RDS | connection string swap (both are vanilla Postgres) |
@@ -59,7 +63,7 @@ same pattern for providers: a `mock` adapter is used by default so the whole
 system runs and is testable without any provider account, and a real
 Twilio/FCM adapter is swapped in via config once credentials exist.
 
-## Phase 4 (optional, not built) — paid cloud scale-out
+## Future work (not phased) — paid cloud scale-out
 
 If this ever needed to be a real production system: Terraform for AWS (ECS
 Fargate, RDS for the Postgres-backed contexts, ElastiCache, Amazon MSK or a

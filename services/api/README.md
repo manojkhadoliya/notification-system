@@ -1,19 +1,22 @@
 # services/api
 
-Fastify HTTP API — the entry point for notification requests and
-preference management. A **composition root**: contains no business logic
-itself, just route handlers that call into `domain-notification`,
-`domain-preferences`, and `domain-identity`, wired to concrete adapters
-(`infra-postgres`, `infra-kafka`, `infra-redis`) at startup via dependency
+Fastify HTTP API — the entry point for notification requests, preference
+management, template management, and the in-app feed. A **composition
+root**: contains no business logic itself, just route handlers that call
+into `domain-notification`, `domain-preferences`, `domain-identity`, and
+`domain-templates`, wired to concrete adapters (`infra-postgres`,
+`infra-kafka`, `infra-cassandra`, `infra-redis`) at startup via dependency
 injection. Produces accepted notification requests directly to Kafka — no
 outbox table, no relay process (see
 [ADR 0008](../../docs/adr/0008-elastic-scale-data-plane.md)).
 
 **Depends on (ports):** `NotificationRepository` (read-only — status
-queries), `PreferenceRepository`, `ApiKeyRepository`, `MessageBroker`,
-`IdempotencyStore`, `RateLimiter`. `POST /v1/notifications` only ever
-writes through `MessageBroker`; `NotificationRepository` is used solely by
-`GET /v1/notifications/:id`, reading the `infra-cassandra` projection.
+queries and the in-app feed), `PreferenceRepository`, `ApiKeyRepository`,
+`TemplateRepository`, `MessageBroker`, `IdempotencyStore`, `RateLimiter`.
+`POST /v1/notifications` only ever writes through `MessageBroker`;
+`NotificationRepository` is used solely for reads (`GET
+/v1/notifications/:id`, `GET /v1/feed/:recipientId`), reading the
+`infra-cassandra` projections.
 
 **Endpoints:** see [`../../docs/architecture/api-spec.md`](../../docs/architecture/api-spec.md).
 

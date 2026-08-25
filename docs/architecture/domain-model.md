@@ -28,8 +28,10 @@ breaking, DLQ).
 - `NotificationRepository` — persist/query requests and attempts.
 - `MessageBroker` — publish a request for async dispatch; workers consume
   through this port too.
-- `SmsGateway` / `PushGateway` (later `EmailGateway`, `InAppGateway`) —
-  send through a concrete channel provider.
+- `SmsGateway` / `PushGateway` / `EmailGateway` / `InAppGateway` — send
+  through a concrete channel provider (per
+  [ADR 0004](../adr/0004-phased-channel-rollout.md), all four are built
+  together, not phased).
 
 ### Recipient Preferences
 Owns who can be contacted, how, and when.
@@ -61,18 +63,26 @@ Owns tenant isolation and access control.
 - `TenantRepository`, `ApiKeyRepository`.
 - `RateLimiter` — enforce `RateLimitPolicy` (implemented via Redis).
 
-### Templates (Phase 2)
+### Templates
 Owns versioned, per-channel message content.
 
 **Ubiquitous language:**
-- **Template**, **TemplateVersion**, **Locale**.
+- **Template** — a named, tenant-owned, per-channel message definition.
+- **TemplateVersion** — an immutable, locale-specific rendering of a
+  `Template`; a `NotificationRequest` references a specific version by id,
+  never "the latest," so edits never change the content of an
+  already-sent request's history.
+- **Locale**.
+
+**Ports it defines:**
+- `TemplateRepository` — read/write templates and their versions.
 
 ## Context map
 
 ```
  Identity & Tenancy ──(tenantId)──▶ Notification Delivery
                                           │
-                    (recipientId)        │  (templateId, Phase 2)
+                    (recipientId)        │  (templateVersionId, optional)
                           ▼               ▼
                  Recipient Preferences   Templates
 ```
