@@ -12,8 +12,9 @@ if it's a long-lived process, which Node HTTP framework.
 
 ## Decision
 `services/api` runs as a long-lived Fastify process, deployed as a container —
-the same container image locally (Docker Compose) and on the Phase 1.5
-free-tier host.
+the same container image locally (Docker Compose) and, when that future
+work is taken up (see [ADR 0004](0004-phased-channel-rollout.md)), on the
+hosted free-tier host.
 
 ## Rationale
 
@@ -27,7 +28,7 @@ free-tier host.
   fights connection pooling (cold starts, connection exhaustion under
   concurrency) — solvable, but only with extra AWS-specific machinery paid
   for no benefit at this scale.
-- **Migration path stays additive.** The optional Phase 4 AWS target is
+- **Migration path stays additive.** The optional future-work AWS target is
   already ECS Fargate, not Lambda (see
   [`infra-strategy.md`](../architecture/infra-strategy.md)). A plain
   container drops behind an ALB unchanged — or behind an API Gateway HTTP
@@ -78,6 +79,7 @@ free-tier host.
   denominator framework recognition.
 - If AWS API Gateway's edge features (WAF, custom domains, usage plans) are
   wanted later, they can be added in front of the existing Fastify
-  container on ALB/ECS Fargate (Phase 4) without changing `services/api` code —
-  this decision does not foreclose that option, it just doesn't build for
+  container on ALB/ECS Fargate (future work) without changing
+  `services/api` code — this decision does not foreclose that option, it
+  just doesn't build for
   it now.

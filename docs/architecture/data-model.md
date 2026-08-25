@@ -32,7 +32,7 @@ split into their own database later without a redesign.
 | tenant_id | uuid | id-reference to Identity & Tenancy, not a joined FK across contexts |
 | phone | text nullable | |
 | push_token | text nullable | |
-| email | text nullable | (Phase 2) |
+| email | text nullable | |
 | created_at | timestamptz | |
 
 **Preference**
@@ -83,20 +83,59 @@ there's no second write to reconcile.
 consistency trade-off). Projection consumers upsert idempotently, so
 at-least-once redelivery from Kafka never produces duplicate rows.
 
-## Templates (Phase 2)
+**NotificationFeedItem** (partition key: `recipient_id`, clustering key: `created_at desc`) — `in_app` channel only
+| field | type | notes |
+|---|---|---|
+| recipient_id | uuid | partition key — "the feed" is a query by this key, not a table scan |
+| created_at | timestamptz | clustering key, descending, for "most recent first" |
+| notification_request_id | uuid | id-reference back to `NotificationRequest` |
+| summary | text | short rendered preview for the feed list |
+| read_at | timestamptz nullable | set when the recipient marks the item read |
 
-**Template** / **TemplateVersion** — versioned per-channel content,
-referenced from `NotificationRequest.payload` by id, not detailed further
-until Phase 2.
+A partition-key-by-`notification_request_id` table can't efficiently answer
+"all unread items for this recipient" — Cassandra has no ad-hoc query
+support, so access patterns have to be modeled as their own partition key.
+`NotificationFeedItem` is a second projection off the same Kafka event
+stream (populated by `services/worker-inapp`, not
+`services/projection-notification`, since it's `in_app`-specific), the same
+CQRS pattern [ADR 0008](../adr/0008-elastic-scale-data-plane.md) already
+established for `NotificationRequest`/`DeliveryAttempt`.
+
+## Templates
+
+**Template**
+| field | type | notes |
+|---|---|---|
+| id | uuid | pk |
+| tenant_id | uuid | id-reference to Identity & Tenancy |
+| name | text | unique per tenant |
+| channel | enum | sms \| push \| email \| in_app |
+| created_at | timestamptz | |
+
+**TemplateVersion**
+| field | type | notes |
+|---|---|---|
+| id | uuid | pk — this is what `NotificationRequest.payload` references, never `Template.id` directly |
+| template_id | uuid | fk → Template (same context) |
+| locale | text | e.g. `en-US` |
+| version | int | monotonically increasing per template |
+| content | text | Handlebars source |
+| created_at | timestamptz | |
+
+`TemplateVersion` rows are immutable once created — publishing an edit
+creates a new version rather than mutating an existing one, so a
+`NotificationRequest` that referenced a version keeps rendering identically
+even after the template is later edited.
 
 ## Notes
 
 - All timestamps are `timestamptz` (UTC), except in the Cassandra-backed
   Notification Delivery tables, which use the store's native timestamp type.
-- `Identity & Tenancy` and `Recipient Preferences` each live in their own
-  Prisma schema module under `infra-postgres`, sharing one physical Postgres
-  database in Phase 1 — this keeps the option open to split into separate
-  databases later without touching domain code. `Notification Delivery` is
+- `Identity & Tenancy`, `Recipient Preferences`, and `Templates` each live in
+  their own Prisma schema module under `infra-postgres`, sharing one
+  physical Postgres database in Phase 1 — this keeps the option open to
+  split into separate databases later without touching domain code.
+  `Notification Delivery` is
   the one context that already lives on different physical infrastructure
   (Kafka + Cassandra via `infra-kafka`/`infra-cassandra`), per
   [ADR 0008](../adr/0008-elastic-scale-data-plane.md) — polyglot persistence

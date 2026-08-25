@@ -21,12 +21,20 @@ never meant to be a system of record.
 ```
 topic: sms.notify        (N partitions, keyed by tenantId)
 topic: push.notify       (N partitions, keyed by tenantId)
+topic: email.notify      (N partitions, keyed by tenantId)
+topic: in_app.notify     (N partitions, keyed by tenantId)
 
 Retry, per channel, one topic per backoff tier (replaces RabbitMQ's
 per-queue TTL + dead-letter exchange):
-  sms.notify.retry-30s   sms.notify.retry-5m   sms.notify.dlq
-  push.notify.retry-30s  push.notify.retry-5m  push.notify.dlq
+  sms.notify.retry-30s     sms.notify.retry-5m     sms.notify.dlq
+  push.notify.retry-30s    push.notify.retry-5m    push.notify.dlq
+  email.notify.retry-30s   email.notify.retry-5m   email.notify.dlq
+  in_app.notify.retry-30s  in_app.notify.retry-5m  in_app.notify.dlq
 ```
+
+`in_app.notify` is consumed by `services/worker-inapp` instead of a
+`worker-*` following the SMS/Push/Email pattern exactly — see "In-app is
+structurally different" below.
 
 Partitioning by `tenantId` keeps all of one tenant's messages in order on
 one partition (useful for debugging and per-tenant rate reasoning) while
@@ -44,9 +52,12 @@ peak without a redesign."
 2. A projection consumer reads `<channel>.notify` and writes the initial
    `NotificationRequest` row (status `accepted`) into the Cassandra-backed
    read model via `NotificationRepository`.
-3. The matching worker (`worker-sms` / `worker-push`) consumes the same
-   topic (separate consumer group), runs the domain dispatch service:
-   preference check → rate limit → call the channel gateway port.
+3. The matching worker (`worker-sms` / `worker-push` / `worker-email`, or
+   `worker-inapp` for `in_app` — see below) consumes the same topic
+   (separate consumer group), runs the domain dispatch service: preference
+   check → rate limit → call the channel gateway port. If the request
+   references a `templateVersionId`, the dispatch service renders it via
+   `domain-templates`' `TemplateRepository` before calling the gateway.
 4. On success: `DeliveryAttempt` persisted as `sent` (later `delivered` via
    webhook, for SMS) through `NotificationRepository`, offset committed.
 5. On failure: the message is produced to that channel's next retry-tier
@@ -54,9 +65,26 @@ peak without a redesign."
    consumer on each retry topic re-produces back to the main topic once the
    delay has elapsed.
 6. After `RetryPolicy.maxAttempts`, the message is produced to the DLQ topic
-   instead of being retried again. A Phase 3 admin endpoint allows
-   inspecting/replaying DLQ messages — Kafka's log retention makes replay a
-   native capability here, not a bolt-on.
+   instead of being retried again. An admin endpoint (see
+   [`../roadmap.md`](../roadmap.md)) allows inspecting/replaying DLQ
+   messages — Kafka's log retention makes replay a native capability here,
+   not a bolt-on.
+
+## In-app is structurally different
+
+SMS/Push/Email are fire-and-forget: dispatch calls an external provider and
+records the result. In-app has no external provider — `InAppGateway` means
+"deliver to a live WebSocket connection if the recipient has one, and
+always write a `NotificationFeedItem` (see
+[`data-model.md`](data-model.md)) so it's visible later regardless." So
+`worker-inapp` does two things `worker-sms`/`worker-push`/`worker-email`
+don't: it holds the WebSocket connection registry (which recipient is
+connected to which instance — needed for the push half), and it's the
+writer for the `NotificationFeedItem` projection (the read half, consumed
+by `GET /v1/feed/:recipientId`). It's still a `services/*` composition
+root, not business logic — connection routing and feed writes are
+mechanical, the "should this recipient see this" decision already happened
+in `domain-preferences` before the message reached this topic.
 
 ## Message envelope
 

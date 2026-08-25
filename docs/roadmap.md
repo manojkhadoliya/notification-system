@@ -1,8 +1,11 @@
 # Roadmap
 
-Living checklist for the phased build. Architecture details behind each
-phase are in [`architecture/`](architecture); decisions behind each choice
-are in [`adr/`](adr).
+Living checklist for the build. Architecture details behind each item are in
+[`architecture/`](architecture); decisions behind each choice are in
+[`adr/`](adr). Per [ADR 0004](adr/0004-phased-channel-rollout.md), all four
+channels are built together as one local-only phase — there is no separate
+channel-rollout phasing and no committed hosted-deployment phase yet; see
+"Future work" at the bottom.
 
 ## Phase 0 — Scaffolding
 - [ ] Monorepo setup (pnpm workspaces, TypeScript project references)
@@ -12,15 +15,17 @@ are in [`adr/`](adr).
 - [ ] `docker-compose.yml` skeleton: postgres, cassandra, redis, kafka only
 - [ ] CI skeleton: lint + typecheck on push
 
-## Phase 1 — SMS + Push core pipeline (local only)
+## Phase 1 — Full local build, all channels
 - [ ] `domain-notification`: entities, value objects, ports
       (`NotificationRepository`, `MessageBroker`, `SmsGateway`,
-      `PushGateway`, `RetryPolicy`)
+      `PushGateway`, `EmailGateway`, `InAppGateway`, `RetryPolicy`)
 - [ ] `domain-preferences`: `Recipient`/`Preference` entities,
       `PreferenceRepository` port, quiet-hours logic
 - [ ] `domain-identity`: `Tenant`/`ApiKey` entities, `RateLimitPolicy`
+- [ ] `domain-templates`: `Template`/`TemplateVersion`/`Locale` entities,
+      `TemplateRepository` port
 - [ ] `infra-postgres`: Prisma schema + repository adapters for
-      `domain-identity` and `domain-preferences` only
+      `domain-identity`, `domain-preferences`, and `domain-templates`
 - [ ] `infra-kafka`: `MessageBroker` adapter, topic/partition/retry-topic
       topology ([ADR 0008](adr/0008-elastic-scale-data-plane.md))
 - [ ] `infra-cassandra`: `NotificationRepository` adapter (read-model
@@ -28,39 +33,41 @@ are in [`adr/`](adr).
 - [ ] `infra-redis`: `RateLimiter` + `IdempotencyStore` adapters
 - [ ] `providers-sms`: Twilio adapter + mock adapter (env-toggled)
 - [ ] `providers-push`: FCM adapter + mock adapter (env-toggled)
+- [ ] `providers-email`: SES/SendGrid adapter + mock adapter (env-toggled)
 - [ ] `services/api`: `POST/GET /v1/notifications`, `GET/PUT /v1/preferences`,
-      producing directly to Kafka (no outbox relay — see ADR 0008)
+      template management endpoints, in-app feed endpoints, producing
+      directly to Kafka (no outbox relay — see ADR 0008)
 - [ ] `services/projection-notification`: Kafka → `NotificationRepository` (Cassandra)
-- [ ] `services/worker-sms`, `services/worker-push`: consume topic, run dispatch
-      service, retry via retry-topic tiers + circuit breaker
+- [ ] `services/worker-sms`, `services/worker-push`, `services/worker-email`:
+      consume topic, run dispatch service, retry via retry-topic tiers +
+      circuit breaker
+- [ ] `services/worker-inapp`: WebSocket gateway (Socket.io) + feed consumer
+      (list/read/unread)
+- [ ] Template rendering (Handlebars) wired into dispatch for
+      template-driven requests
 - [ ] Unit tests: domain services, adapters
 - [ ] Integration tests: API → Kafka → worker/projection consumer → mock provider
-- [ ] `docker compose up` demo works end-to-end
+- [ ] Reliability/observability polish (still local-only):
+  - [ ] DLQ replay admin endpoint, using Kafka's log retention (see `messaging.md`)
+  - [ ] Prometheus metrics + Grafana dashboard in compose
+  - [ ] OpenTelemetry tracing across API → Kafka → worker/projection consumer
+  - [ ] Load test script (k6 or autocannon) — demonstrates the elastic
+        peak-scale-out mechanism from [ADR 0008](adr/0008-elastic-scale-data-plane.md)
+        (partition count + consumer-group autoscaling), not a raw
+        throughput target
+- [ ] `docker compose up` demo works end-to-end for all four channels
 
-## Phase 1.5 — Hosted free-tier demo
-- [ ] Deploy Phase 1 stack to free-tier providers (see
-      [`architecture/infra-strategy.md`](architecture/infra-strategy.md))
-- [ ] Document the live deploy + any config deltas from local
+## Future work (not phased — introduce later if needed)
 
-## Phase 2 — Email + In-app channels
-- [ ] `domain-templates` bounded context (Template, TemplateVersion,
-      Locale)
-- [ ] `providers-email`: SES/SendGrid adapter + mock adapter
-- [ ] `services/worker-email`
-- [ ] In-app: WebSocket gateway (Socket.io), notification feed API
-      (list/read/unread), `services/worker-inapp`
-- [ ] Template management API + Handlebars rendering
+Deliberately left unscheduled: these require leaving "local run only," which
+is a separate decision from channel breadth (see
+[ADR 0004](adr/0004-phased-channel-rollout.md)).
 
-## Phase 3 — Reliability & observability polish
-- [ ] DLQ replay admin endpoint, using Kafka's log retention (see `messaging.md`)
-- [ ] Prometheus metrics + Grafana dashboard in compose
-- [ ] OpenTelemetry tracing across API → Kafka → worker/projection consumer
-- [ ] Load test script (k6 or autocannon) — used to demonstrate the elastic
-      peak-scale-out mechanism from [ADR 0008](adr/0008-elastic-scale-data-plane.md)
-      (partition count + consumer-group autoscaling), not just raw numbers
-- [ ] DLQ replay using Kafka's log retention (see `messaging.md`)
-
-## Phase 4 — Optional paid-cloud scale-out (not committed)
-- [ ] Terraform for AWS (ECS Fargate, RDS, ElastiCache, Amazon MQ)
-- [ ] CD pipeline (GitHub Actions)
-- [ ] Architecture diagram + live demo link in root README
+- [ ] Hosted free-tier demo — deploy the Phase 1 stack to free-tier
+      providers (see [`architecture/infra-strategy.md`](architecture/infra-strategy.md))
+      and document the live deploy + any config deltas from local
+- [ ] Paid-cloud scale-out — Terraform for AWS (ECS Fargate, RDS,
+      ElastiCache, Amazon MSK or self-managed Kafka, Amazon Keyspaces or
+      self-managed Scylla), CD pipeline (GitHub Actions)
+- [ ] Architecture diagram + live demo link in root README (once a hosted
+      demo exists)
