@@ -6,7 +6,7 @@ Consumes the `sms.notify` topic and dispatches SMS notifications. A
 `infra-cassandra`, `infra-postgres` (preferences), `infra-kafka`,
 `infra-redis`, and `providers-sms`, and runs the retry-topic/backoff/
 circuit-breaker loop around it (see
-[ADR 0008](../../docs/adr/0008-elastic-scale-data-plane.md)).
+[ADR 0002](../../docs/adr/0002-message-broker-kafka.md)).
 
 **Depends on (ports):** `NotificationRepository`, `PreferenceRepository`,
 `MessageBroker`, `RateLimiter`, `SmsGateway`.

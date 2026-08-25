@@ -8,16 +8,18 @@ wire-compatible; either can back this adapter). Stores the
 partitioned for write-heavy, id-keyed access with no cross-context joins.
 
 Written to by `services/projection-notification` (projecting the Kafka
-event stream) and by `services/worker-sms`/`services/worker-push` (persisting
+event stream) and by `services/worker-sms`/`services/worker-push`/
+`services/worker-email`/`services/worker-inapp` (persisting
 `DeliveryAttempt` rows). Read by `services/api`'s
 `GET /v1/notifications/:id` endpoint — this read is eventually consistent
 with the Kafka log, not transactional (see
-[ADR 0008](../../docs/adr/0008-elastic-scale-data-plane.md)'s consistency
+[ADR 0008](../../docs/adr/0008-notification-delivery-cqrs.md)'s consistency
 trade-off).
 
 Depends on `domain-notification` (to implement its port interface); never
 the reverse.
 
-**Delivered in:** Phase 1. New package introduced by
-[ADR 0008](../../docs/adr/0008-elastic-scale-data-plane.md), replacing
-`domain-notification`'s prior `infra-postgres` implementation.
+**Delivered in:** Phase 1. Rationale for Cassandra in
+[ADR 0003](../../docs/adr/0003-polyglot-persistence.md); the CQRS pattern
+this package's role fits into is in
+[ADR 0008](../../docs/adr/0008-notification-delivery-cqrs.md).

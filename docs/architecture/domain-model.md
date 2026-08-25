@@ -30,7 +30,7 @@ breaking, DLQ).
   through this port too.
 - `SmsGateway` / `PushGateway` / `EmailGateway` / `InAppGateway` — send
   through a concrete channel provider (per
-  [ADR 0004](../adr/0004-phased-channel-rollout.md), all four are built
+  [ADR 0004](../adr/0004-channel-rollout.md), all four are built
   together, not phased).
 
 ### Recipient Preferences
@@ -114,10 +114,10 @@ in Phase 0, so the boundary can't silently erode as the codebase grows.
 context owns its own port and repository, different contexts are free to
 be backed by different storage technology, chosen for that context's own
 access pattern — nothing requires one database for the whole system. This
-is applied in practice in [ADR 0008](../adr/0008-elastic-scale-data-plane.md):
+is applied in practice in [ADR 0003](../adr/0003-polyglot-persistence.md):
 `domain-notification` is backed by Kafka + Cassandra (its write-heavy,
-id-keyed hot path), while `domain-identity`/`domain-preferences` stay on
-Postgres.
+id-keyed hot path), while `domain-identity`/`domain-preferences`/
+`domain-templates` stay on Postgres.
 
 ## Where does new logic belong?
 

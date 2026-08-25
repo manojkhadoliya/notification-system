@@ -68,5 +68,5 @@ Multi-tenancy, idempotency, and rate limiting are the parts of a
 notification system that are easy to skip in a toy version but are exactly
 what makes a real one hard — they're included from Phase 1 specifically to
 demonstrate that judgment, applied uniformly across all four channels
-(see [ADR 0004](../adr/0004-phased-channel-rollout.md)) rather than
+(see [ADR 0004](../adr/0004-channel-rollout.md)) rather than
 gold-plating features not yet needed.

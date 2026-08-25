@@ -48,7 +48,7 @@ split into their own database later without a redesign.
 
 ## Notification Delivery (core domain)
 
-Per [ADR 0008](../adr/0008-elastic-scale-data-plane.md), this context's
+Per [ADR 0008](../adr/0008-notification-delivery-cqrs.md), this context's
 data model is CQRS-shaped: Kafka (`sms.notify`/`push.notify` topics, see
 [`messaging.md`](messaging.md)) is the write/event side and the durable log
 of record; the tables below are the **read-model projection**, stored in a
@@ -98,7 +98,7 @@ support, so access patterns have to be modeled as their own partition key.
 `NotificationFeedItem` is a second projection off the same Kafka event
 stream (populated by `services/worker-inapp`, not
 `services/projection-notification`, since it's `in_app`-specific), the same
-CQRS pattern [ADR 0008](../adr/0008-elastic-scale-data-plane.md) already
+CQRS pattern [ADR 0008](../adr/0008-notification-delivery-cqrs.md) already
 established for `NotificationRequest`/`DeliveryAttempt`.
 
 ## Templates
@@ -135,11 +135,11 @@ even after the template is later edited.
   their own Prisma schema module under `infra-postgres`, sharing one
   physical Postgres database in Phase 1 — this keeps the option open to
   split into separate databases later without touching domain code.
-  `Notification Delivery` is
-  the one context that already lives on different physical infrastructure
-  (Kafka + Cassandra via `infra-kafka`/`infra-cassandra`), per
-  [ADR 0008](../adr/0008-elastic-scale-data-plane.md) — polyglot persistence
-  chosen per context's access pattern, not a system-wide default.
+  `Notification Delivery` is the one context that lives on different
+  physical infrastructure (Kafka + Cassandra via
+  `infra-kafka`/`infra-cassandra`), per
+  [ADR 0003](../adr/0003-polyglot-persistence.md) — persistence chosen per
+  context's access pattern, not a system-wide default.
 - **Retention:** `NotificationRequest`/`DeliveryAttempt`/`NotificationFeedItem`
   grow without bound otherwise — Cassandra scales storage horizontally (see
   [`scaling-strategy.md`](scaling-strategy.md)), but that's a cost lever, not

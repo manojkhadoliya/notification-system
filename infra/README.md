@@ -11,7 +11,7 @@ running:
 
 This is the only infrastructure defined in code for now — the hosted
 free-tier demo (future work, not phased — see
-[ADR 0004](../docs/adr/0004-phased-channel-rollout.md)) is configured
+[ADR 0004](../docs/adr/0004-channel-rollout.md)) is configured
 directly on each provider's dashboard rather than via IaC, and a future
 paid-cloud Terraform setup is optional and not yet committed to. See
 [`../docs/architecture/infra-strategy.md`](../docs/architecture/infra-strategy.md)

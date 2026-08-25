@@ -9,5 +9,5 @@ Depends on `domain-notification` (to implement its port interface); never
 the reverse.
 
 **Delivered in:** Phase 1, built together with the other three channels
-(see [ADR 0004](../../docs/adr/0004-phased-channel-rollout.md)). Used by
+(see [ADR 0004](../../docs/adr/0004-channel-rollout.md)). Used by
 `services/worker-email`.

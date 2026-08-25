@@ -12,6 +12,7 @@ to consume.
 Depends on `domain-notification` (to implement its port interface); never
 the reverse.
 
-**Delivered in:** Phase 1. Renamed from `infra-rabbitmq`; rationale for
-Kafka in [ADR 0008](../../docs/adr/0008-elastic-scale-data-plane.md)
-(supersedes [ADR 0002](../../docs/adr/0002-queue-choice-rabbitmq.md)).
+**Delivered in:** Phase 1. Rationale for Kafka in
+[ADR 0002](../../docs/adr/0002-message-broker-kafka.md); the CQRS pattern
+this package's producer/consumer usage implements is in
+[ADR 0008](../../docs/adr/0008-notification-delivery-cqrs.md).

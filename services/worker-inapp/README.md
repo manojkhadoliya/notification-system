@@ -17,4 +17,4 @@ recipient was connected at send time. Also backs
 `RateLimiter`, `InAppGateway`.
 
 **Delivered in:** Phase 1, built together with the other three channels
-(see [ADR 0004](../../docs/adr/0004-phased-channel-rollout.md)).
+(see [ADR 0004](../../docs/adr/0004-channel-rollout.md)).

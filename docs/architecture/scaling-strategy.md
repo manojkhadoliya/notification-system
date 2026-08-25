@@ -34,7 +34,7 @@ uses the *same* architecture, just more capacity.
 | Component | What actually scales it | Headroom at ~1,000/sec (industry reference) | What would force a real redesign |
 |---|---|---|---|
 | `services/api` (Fastify) | Horizontal replicas behind a load balancer, autoscaled on CPU/request-rate | Stateless — a single modern Fastify instance handles low-thousands of simple req/sec; this is a replica-count change, not a ceiling | Only if a route stopped being stateless (e.g. in-memory session state) — not the case here |
-| Kafka (notification hot path) | Partition count + consumer-group size ([ADR 0008](../adr/0008-elastic-scale-data-plane.md)) | A single broker commonly sustains 100K+ msgs/sec; even a modest 3-broker cluster is 100x+ headroom over a 1,000/sec peak | Only if the log-based model itself stopped fitting the access pattern — not expected at this scale |
+| Kafka (notification hot path) | Partition count + consumer-group size ([ADR 0002](../adr/0002-message-broker-kafka.md)) | A single broker commonly sustains 100K+ msgs/sec; even a modest 3-broker cluster is 100x+ headroom over a 1,000/sec peak | Only if the log-based model itself stopped fitting the access pattern — not expected at this scale |
 | Cassandra/ScyllaDB (notification read model) | Add nodes; linear scaling | Tens of thousands of writes/sec per node is a normal reference figure; `NotificationRequest`/`DeliveryAttempt` partition keys are UUIDs, so load is already evenly spread regardless of tenant size | Only if the access pattern grew a real join/aggregate requirement — not present in this domain |
 | Redis (rate limiting, idempotency, cache — see below) | Cluster, sharded by key | Cluster throughput scales with node count for well-distributed keys | **Known edge case, not solved here:** a single extremely high-volume tenant's `(tenantId, channel)` rate-limit key is one key, so it lands on one shard. Mitigation identified (split into N sub-buckets, sum/approximate) but not built — flagged honestly rather than silently assumed away. |
 | Postgres (identity, preferences, templates) | Connection pooling (PgBouncer) + a read-through cache in front of the hot reads + a read replica if ever needed | `Tenant`/`ApiKey`/`Template` row counts stay small (thousands to low millions) even at 1M end-recipients, because recipients live in `domain-preferences`'s own table, not the tenant table; see "Keeping Postgres off the hot path" below | Only if this context's *write* volume ever approached the notification-send hot path — it structurally can't, tenant/template writes are provisioning-time events, not per-notification |
@@ -58,13 +58,13 @@ built for this — see the table above), and Postgres only ever sees
 provisioning-rate traffic (new tenants, key rotation, preference edits) —
 which stays low regardless of how large the *notification* volume grows.
 This is what lets `domain-identity`/`domain-preferences` stay on a single
-Postgres instance (per [ADR 0003](../adr/0003-database-postgres.md)) all the
+Postgres instance (per [ADR 0003](../adr/0003-polyglot-persistence.md)) all the
 way through the growth curve above, with connection pooling and an optional
 read replica as the only levers ever needed.
 
 ## Why the Kafka partition key is `recipientId`, not `tenantId`
 
-Partitioning by `tenantId` (an earlier version of this design) has a real
+Partitioning by `tenantId` looks like the obvious choice, but it has a real
 failure mode at the 1M-user horizon: a single large tenant's throughput is
 capped at whatever *one* partition can do, no matter how many partitions
 the topic has — because all of that tenant's traffic hashes to the same
@@ -90,14 +90,15 @@ real requirement). See [`messaging.md`](messaging.md) for the topic layout.
   [`domain-model.md`](domain-model.md)) argues against.
 - **Real external provider throughput ceilings** (Twilio, FCM) are far
   below any number in this document and are unrelated to this system's
-  architecture — a partnerships/multi-account problem, not a software one
-  (carried over from [ADR 0008](../adr/0008-elastic-scale-data-plane.md)).
+  architecture — a partnerships/multi-account problem, not a software one.
 
 ## Relationship to other docs
 
 This document is the "how does growth get absorbed" narrative across the
-*whole* system; [ADR 0008](../adr/0008-elastic-scale-data-plane.md) is the
-decision record for *why* Kafka+Cassandra specifically back the
-notification-delivery hot path, and
+*whole* system; [ADR 0002](../adr/0002-message-broker-kafka.md) and
+[ADR 0003](../adr/0003-polyglot-persistence.md) are the decision records
+for *why* Kafka and Cassandra specifically back the notification-delivery
+hot path, [ADR 0008](../adr/0008-notification-delivery-cqrs.md) is *how*
+they fit together (CQRS), and
 [`infra-strategy.md`](infra-strategy.md) is the local-vs-hosted deployment
-story. All three describe the same architecture from different angles.
+story. All four describe the same architecture from different angles.

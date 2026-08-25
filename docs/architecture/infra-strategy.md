@@ -35,21 +35,21 @@ PgBouncer (connection pooling — see
 [`scaling-strategy.md`](scaling-strategy.md#keeping-postgres-off-the-hot-path))
 isn't in the local compose stack: it's a scale lever with nothing to prove
 at single-developer local volume, the same reasoning
-[ADR 0008](../adr/0008-elastic-scale-data-plane.md) already applies to
-Kafka partition counts. It's added when the hosted/scaled deployment
-actually needs it, not before.
+[ADR 0002](../adr/0002-message-broker-kafka.md) already applies to Kafka
+partition counts. It's added when the hosted/scaled deployment actually
+needs it, not before.
 
 Zero external accounts, zero cost, fastest iteration loop. This proves the
-pipeline is *correct* end-to-end (see
-[ADR 0008](../adr/0008-elastic-scale-data-plane.md)) — a single-broker,
-single-node local setup does not, by itself, demonstrate the peak-throughput
-scale-out that decision is about; that needs real infrastructure to
-load-test, which stays out of scope here. This is the environment all
-Phase 1 development and testing targets.
+pipeline is *correct* end-to-end — a single-broker, single-node local setup
+does not, by itself, demonstrate the peak-throughput scale-out
+[ADR 0002](../adr/0002-message-broker-kafka.md) and
+[`scaling-strategy.md`](scaling-strategy.md) are about; that needs real
+infrastructure to load-test, which stays out of scope here. This is the
+environment all Phase 1 development and testing targets.
 
 ## Future work (not phased) — hosted free-tier demo
 
-Deferred per [ADR 0004](../adr/0004-phased-channel-rollout.md) — channel
+Deferred per [ADR 0004](../adr/0004-channel-rollout.md) — channel
 breadth (all four channels, Phase 1) and deployment target (local vs.
 hosted) are separate decisions, and only the former is committed to right
 now. When this is picked up: same containers/services, moved to free tiers
@@ -82,11 +82,13 @@ Scylla cluster for the notification-delivery read model), documented as a
 future option in [`../roadmap.md`](../roadmap.md) but explicitly out of
 scope for the portfolio build. This is also where partition
 counts/consumer-group sizing would actually be tuned against a real load
-test — the mechanism ADR 0008's elastic peak-handling story depends on. The
-point of the ports/adapters investment made in Phase 1 is that this phase
-would be infrastructure work, not an application rewrite.
+test — the mechanism [ADR 0002](../adr/0002-message-broker-kafka.md)'s
+scale-out story depends on. The point of the ports/adapters investment made
+in Phase 1 is that this phase would be infrastructure work, not an
+application rewrite.
 
-See [ADR 0006](../adr/0006-local-first-free-tier-infra.md) and
-[ADR 0008](../adr/0008-elastic-scale-data-plane.md) for the decision
-records, and [`scaling-strategy.md`](scaling-strategy.md) for the
+See [ADR 0006](../adr/0006-local-first-free-tier-infra.md),
+[ADR 0002](../adr/0002-message-broker-kafka.md), and
+[ADR 0003](../adr/0003-polyglot-persistence.md) for the decision records,
+and [`scaling-strategy.md`](scaling-strategy.md) for the
 user-growth curve this whole document's migration path is sized against.
