@@ -57,5 +57,5 @@ its responsibility and which phase brings it to life.
 
 Node.js / TypeScript, Fastify, PostgreSQL (Prisma) + Cassandra/ScyllaDB
 (polyglot persistence per bounded context, see
-[ADR 0008](docs/adr/0008-elastic-scale-data-plane.md)), Kafka, Redis, Docker
+[ADR 0003](docs/adr/0003-polyglot-persistence.md)), Kafka, Redis, Docker
 Compose for local dev, free-tier hosting for the public demo.

@@ -8,7 +8,7 @@ and a summary of key decisions in one read, start with
 
 - Demonstrate a realistic multi-channel notification pipeline (SMS, Push,
   Email, and In-app, built together per
-  [ADR 0004](../adr/0004-phased-channel-rollout.md)) with reliable async
+  [ADR 0004](../adr/0004-channel-rollout.md)) with reliable async
   delivery.
 - Show Domain-Driven Design in practice: bounded contexts, ports and
   adapters, no domain-to-infrastructure coupling.
@@ -20,7 +20,7 @@ and a summary of key decisions in one read, start with
 Notification Delivery's hot path is event-driven (Kafka + Cassandra);
 Identity & Tenancy / Recipient Preferences / Templates stay on Postgres,
 looked up during dispatch. See
-[ADR 0008](../adr/0008-elastic-scale-data-plane.md) for why the hot path
+[ADR 0003](../adr/0003-polyglot-persistence.md) for why the hot path
 differs from the other contexts. `worker-email` is structurally identical to
 `worker-sms`/`worker-push` (own topic, own gateway port) and omitted below
 only for diagram size; `worker-inapp` is genuinely different — see
@@ -90,7 +90,7 @@ Client / API consumer
 | `providers-email` | Implements `EmailGateway` port (SES/SendGrid + mock) | SES/SendGrid API |
 
 `services/projection-notification` is a new composition root introduced by
-[ADR 0008](../adr/0008-elastic-scale-data-plane.md) — it is a queue-consumer
+[ADR 0008](../adr/0008-notification-delivery-cqrs.md) — it is a queue-consumer
 worker like `worker-sms`/`worker-push`, not an HTTP service, so it follows
 the same "backend process" naming rule from
 [ADR 0001](../adr/0001-monorepo-structure.md#terminology).

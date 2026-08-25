@@ -4,17 +4,13 @@ Accessed only through the domain-owned `MessageBroker` port
 (`domain-notification`); implemented by `infra-kafka`. Workers and the API
 never talk to a Kafka client library directly.
 
-## Why Kafka (superseding RabbitMQ)
+## Why Kafka
 
-[ADR 0002](../adr/0002-queue-choice-rabbitmq.md) chose RabbitMQ for its
-native per-message retry/DLQ semantics, at portfolio/local-first scope.
-[ADR 0008](../adr/0008-elastic-scale-data-plane.md) supersedes that: the
-requirement became elastic peak scale-out — absorb a large traffic burst by
-adding partitions/consumers, not by redesigning the broker at the moment
-it's needed. Kafka's partitioned log is what makes that a capacity change
-instead of an architecture change, and it's also now the durable log of
-record for accepted requests (see "Message flow" below) — RabbitMQ was
-never meant to be a system of record.
+[ADR 0002](../adr/0002-message-broker-kafka.md) picks Kafka so that
+absorbing a traffic burst is a partition/consumer capacity change, not a
+broker redesign. [ADR 0008](../adr/0008-notification-delivery-cqrs.md)
+builds on that: Kafka is also the durable log of record for accepted
+requests (see "Message flow" below), not just a dispatch mechanism.
 
 ## Topic layout
 
@@ -56,7 +52,7 @@ growth without a redesign."
    writes from producer-side retries — a broker-session mechanism, separate
    from the application-level dedup key above). There is no Postgres write
    in this path and no outbox relay — Kafka's replication *is* the
-   durability guarantee (see [ADR 0008](../adr/0008-elastic-scale-data-plane.md)).
+   durability guarantee (see [ADR 0008](../adr/0008-notification-delivery-cqrs.md)).
 2. A projection consumer reads `<channel>.notify` and writes the initial
    `NotificationRequest` row (status `accepted`) into the Cassandra-backed
    read model via `NotificationRepository`.
@@ -131,4 +127,4 @@ partitions proves the pipeline is *correct* end-to-end — ordering, retry
 tiers, idempotent production/consumption. It does not, by itself,
 demonstrate peak throughput; that's a property of partition count and
 consumer-group size at real load, which is a capacity/hosting decision, not
-a code change. See [ADR 0008](../adr/0008-elastic-scale-data-plane.md).
+a code change. See [ADR 0002](../adr/0002-message-broker-kafka.md).

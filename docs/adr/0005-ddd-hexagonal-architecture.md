@@ -1,21 +1,22 @@
 # ADR 0005: Domain-Driven Design with ports and adapters
 
 ## Status
-Accepted
+In Progress
 
 ## Context
-The user explicitly requested that services not be tightly coupled, and
-that the system's design adopt Domain-Driven Design concepts rather than a
-purely technical (controllers/services/repositories-as-one-blob)
-structure. A naive layered structure (one `services/` folder calling
-Prisma and amqplib directly) would work for Phase 1 but would make the
-later "swap infra without touching business logic" requirement (see ADR
-0006) hard to guarantee — nothing would stop business logic from quietly
-depending on Prisma types.
+Services must not be tightly coupled to each other or to specific
+infrastructure choices, and the system's design should reflect
+Domain-Driven Design concepts rather than a purely technical
+(controllers/services/repositories-as-one-blob) structure. A naive layered
+structure (one `services/` folder calling Prisma and a Kafka client
+directly) would work initially but would make the "swap infra without
+touching business logic" requirement (see [ADR 0006](0006-local-first-free-tier-infra.md))
+hard to guarantee — nothing would stop business logic from quietly
+depending on a specific infra library's types.
 
 ## Decision
 Organize the system into bounded contexts (`domain-notification`,
-`domain-preferences`, `domain-identity`, later `domain-templates`), each
+`domain-preferences`, `domain-identity`, `domain-templates`), each
 owning its entities, value objects, and **ports** (interface definitions
 for anything the domain needs from the outside world — persistence,
 messaging, external providers). Infrastructure packages (`infra-*`,

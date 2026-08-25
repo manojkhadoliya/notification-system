@@ -14,5 +14,5 @@ inside it; this package only owns the entities and the port (see
 **Implemented by:** `infra-postgres`.
 
 **Delivered in:** Phase 1, built together with the other three channels
-(see [ADR 0004](../../docs/adr/0004-phased-channel-rollout.md)). Full model
+(see [ADR 0004](../../docs/adr/0004-channel-rollout.md)). Full model
 in [`../../docs/architecture/domain-model.md`](../../docs/architecture/domain-model.md#templates).

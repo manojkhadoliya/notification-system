@@ -6,7 +6,7 @@ Consumes the `push.notify` topic and dispatches push notifications. A
 `infra-cassandra`, `infra-postgres` (preferences), `infra-kafka`,
 `infra-redis`, and `providers-push`, and runs the retry-topic/backoff/
 circuit-breaker loop around it (see
-[ADR 0008](../../docs/adr/0008-elastic-scale-data-plane.md)). Structurally
+[ADR 0002](../../docs/adr/0002-message-broker-kafka.md)). Structurally
 identical to `services/worker-sms`, differing only in the gateway port it's
 wired to.
 

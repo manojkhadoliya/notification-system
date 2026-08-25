@@ -8,7 +8,7 @@ into `domain-notification`, `domain-preferences`, `domain-identity`, and
 `infra-kafka`, `infra-cassandra`, `infra-redis`) at startup via dependency
 injection. Produces accepted notification requests directly to Kafka — no
 outbox table, no relay process (see
-[ADR 0008](../../docs/adr/0008-elastic-scale-data-plane.md)).
+[ADR 0008](../../docs/adr/0008-notification-delivery-cqrs.md)).
 
 **Depends on (ports):** `NotificationRepository` (read-only — status
 queries and the in-app feed), `PreferenceRepository`, `ApiKeyRepository`,

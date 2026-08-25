@@ -34,10 +34,11 @@ Accept a notification request for async dispatch.
   "status": "accepted"
 }
 ```
-`202` means the request was durably produced to Kafka (idempotent producer
-keyed on `tenantId` + `idempotencyKey`), not that it's been written to a
-queryable store yet — see the note on `GET /v1/notifications/:id` below and
-[ADR 0008](../adr/0008-elastic-scale-data-plane.md).
+`202` means the request was durably produced to Kafka (after
+application-level dedup on `tenantId` + `idempotencyKey`), not that it's
+been written to a queryable store yet — see the note on
+`GET /v1/notifications/:id` below and
+[ADR 0008](../adr/0008-notification-delivery-cqrs.md).
 
 **Response — 409 Conflict** — idempotency key already used for a different
 payload within the dedup window.

@@ -2,7 +2,7 @@
 
 Living checklist for the build. Architecture details behind each item are in
 [`architecture/`](architecture); decisions behind each choice are in
-[`adr/`](adr). Per [ADR 0004](adr/0004-phased-channel-rollout.md), all four
+[`adr/`](adr). Per [ADR 0004](adr/0004-channel-rollout.md), all four
 channels are built together as one local-only phase — there is no separate
 channel-rollout phasing and no committed hosted-deployment phase yet; see
 "Future work" at the bottom.
@@ -27,7 +27,7 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
 - [ ] `infra-postgres`: Prisma schema + repository adapters for
       `domain-identity`, `domain-preferences`, and `domain-templates`
 - [ ] `infra-kafka`: `MessageBroker` adapter, topic/partition/retry-topic
-      topology ([ADR 0008](adr/0008-elastic-scale-data-plane.md))
+      topology ([ADR 0002](adr/0002-message-broker-kafka.md))
 - [ ] `infra-cassandra`: `NotificationRepository` adapter (read-model
       projection for `domain-notification`)
 - [ ] `infra-redis`: `RateLimiter` + `IdempotencyStore` adapters
@@ -52,7 +52,7 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
   - [ ] Prometheus metrics + Grafana dashboard in compose
   - [ ] OpenTelemetry tracing across API → Kafka → worker/projection consumer
   - [ ] Load test script (k6 or autocannon) — demonstrates the elastic
-        peak-scale-out mechanism from [ADR 0008](adr/0008-elastic-scale-data-plane.md)
+        peak-scale-out mechanism from [ADR 0002](adr/0002-message-broker-kafka.md)
         (partition count + consumer-group autoscaling), not a raw
         throughput target
 - [ ] `docker compose up` demo works end-to-end for all four channels
@@ -61,7 +61,7 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
 
 Deliberately left unscheduled: these require leaving "local run only," which
 is a separate decision from channel breadth (see
-[ADR 0004](adr/0004-phased-channel-rollout.md)).
+[ADR 0004](adr/0004-channel-rollout.md)).
 
 - [ ] Hosted free-tier demo — deploy the Phase 1 stack to free-tier
       providers (see [`architecture/infra-strategy.md`](architecture/infra-strategy.md))

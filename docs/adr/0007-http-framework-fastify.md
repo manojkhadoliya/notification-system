@@ -1,28 +1,29 @@
 # ADR 0007: Fastify as a long-lived process, not API Gateway/Lambda or Express
 
 ## Status
-Accepted
+In Progress
 
 ## Context
-`services/api` is the ingress for `POST/GET /v1/notifications` and the
-preference endpoints (see [`api-spec.md`](../architecture/api-spec.md)).
-Two separate questions needed deciding: (1) does it run as a long-lived
-server process or as Lambda functions behind a managed API Gateway, and (2)
-if it's a long-lived process, which Node HTTP framework.
+`services/api` is the ingress for notification, preference, template, and
+feed endpoints (see [`api-spec.md`](../architecture/api-spec.md)). Two
+separate questions need deciding: (1) does it run as a long-lived server
+process or as Lambda functions behind a managed API Gateway, and (2) if
+it's a long-lived process, which Node HTTP framework.
 
 ## Decision
-`services/api` runs as a long-lived Fastify process, deployed as a container —
-the same container image locally (Docker Compose) and, when that future
-work is taken up (see [ADR 0004](0004-phased-channel-rollout.md)), on the
-hosted free-tier host.
+`services/api` runs as a long-lived Fastify process, deployed as a
+container — the same container image locally (Docker Compose) and, when
+the hosted free-tier demo is taken up (see
+[ADR 0006](0006-local-first-free-tier-infra.md)), on that host too.
 
 ## Rationale
 
 ### Process model: long-lived server, not Lambda + API Gateway
 - **Local/hosted parity ([ADR 0006](0006-local-first-free-tier-infra.md)).**
-  Phase 1 targets `docker compose up` locally and Fly.io/Railway for the
-  hosted demo — both run containers, not Lambda. Building for API Gateway
-  now would make local dev and the hosted demo diverge from day one.
+  The local build targets `docker compose up`, and the future hosted demo
+  targets Fly.io/Railway — both run containers, not Lambda. Building for
+  API Gateway now would make local dev and the hosted demo diverge from day
+  one.
 - **Connection-heavy workload.** `services/api` holds a Postgres pool and talks
   to Kafka and Redis per request. Lambda's per-invocation lifecycle
   fights connection pooling (cold starts, connection exhaustion under
@@ -81,5 +82,4 @@ hosted free-tier host.
   wanted later, they can be added in front of the existing Fastify
   container on ALB/ECS Fargate (future work) without changing
   `services/api` code — this decision does not foreclose that option, it
-  just doesn't build for
-  it now.
+  just doesn't build for it now.
