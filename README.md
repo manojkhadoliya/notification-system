@@ -38,7 +38,7 @@ so "service" is used throughout instead of the more ambiguous "app."
 services/           composition roots (HTTP API, queue workers) — DI wiring only
 packages/
   domain-*/          bounded-context domain models + ports, zero infra deps
-  infra-*/            adapters implementing domain ports (Postgres, RabbitMQ, Redis)
+  infra-*/            adapters implementing domain ports (Postgres, Kafka, Cassandra, Redis)
   providers-*/        adapters for external channel providers (Twilio, FCM, ...)
   shared-kernel/       minimal cross-context value objects
 infra/               local infrastructure (docker-compose)
@@ -50,5 +50,7 @@ its responsibility and which phase brings it to life.
 
 ## Tech stack (planned)
 
-Node.js / TypeScript, Fastify, PostgreSQL (Prisma), RabbitMQ, Redis, Docker
+Node.js / TypeScript, Fastify, PostgreSQL (Prisma) + Cassandra/ScyllaDB
+(polyglot persistence per bounded context, see
+[ADR 0008](docs/adr/0008-elastic-scale-data-plane.md)), Kafka, Redis, Docker
 Compose for local dev, free-tier hosting for the public demo.

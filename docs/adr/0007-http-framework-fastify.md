@@ -23,7 +23,7 @@ free-tier host.
   hosted demo — both run containers, not Lambda. Building for API Gateway
   now would make local dev and the hosted demo diverge from day one.
 - **Connection-heavy workload.** `services/api` holds a Postgres pool and talks
-  to RabbitMQ and Redis per request. Lambda's per-invocation lifecycle
+  to Kafka and Redis per request. Lambda's per-invocation lifecycle
   fights connection pooling (cold starts, connection exhaustion under
   concurrency) — solvable, but only with extra AWS-specific machinery paid
   for no benefit at this scale.
@@ -45,7 +45,7 @@ free-tier host.
 
 ### Framework: Fastify, not Express
 - **Async-native error handling.** Every route in this system touches
-  Postgres, RabbitMQ, or Redis, so every handler is async. Express 4
+  Postgres, Kafka, or Redis, so every handler is async. Express 4
   (still the dominant version in the ecosystem) does not route a rejected
   promise inside a handler to its error middleware without an added
   wrapper (`express-async-errors`) — a silent-failure footgun for an

@@ -2,11 +2,12 @@
 
 Local infrastructure definitions. Phase 0 adds a `docker-compose.yml` here
 running:
-- `postgres` (official image)
+- `postgres` (official image — identity, preferences)
+- `cassandra` (official image, single node — notification delivery read model)
 - `redis` (official image)
-- `rabbitmq` (official image, management plugin enabled)
-- `api`, `worker-sms`, `worker-push` (built from this repo, once they
-  exist)
+- `kafka` (official image, KRaft mode)
+- `api`, `worker-sms`, `worker-push`, `projection-notification` (built from
+  this repo, once they exist)
 
 This is the only infrastructure defined in code for now — the Phase 1.5
 hosted free-tier demo is configured directly on each provider's dashboard

@@ -30,6 +30,10 @@ Accept a notification request for async dispatch.
   "status": "accepted"
 }
 ```
+`202` means the request was durably produced to Kafka (idempotent producer
+keyed on `tenantId` + `idempotencyKey`), not that it's been written to a
+queryable store yet — see the note on `GET /v1/notifications/:id` below and
+[ADR 0008](../adr/0008-elastic-scale-data-plane.md).
 
 **Response — 409 Conflict** — idempotency key already used for a different
 payload within the dedup window.
@@ -38,7 +42,13 @@ payload within the dedup window.
 
 ## `GET /v1/notifications/:id`
 
-Fetch current status and delivery-attempt history for a request.
+Fetch current status and delivery-attempt history for a request, read from
+the Cassandra-backed projection populated by
+`services/projection-notification`. **Eventually consistent** with the
+Kafka log, not transactional: a `GET` issued immediately after a `202` may
+return `404` for a brief window until the projection consumer catches up.
+Clients that need to confirm acceptance synchronously should treat `202`
+itself as that confirmation, not a subsequent `GET`.
 
 **Response — 200 OK**
 ```json

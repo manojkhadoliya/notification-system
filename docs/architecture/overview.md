@@ -11,56 +11,71 @@
 
 ## Component diagram (Phase 1: SMS + Push)
 
+Notification Delivery's hot path is event-driven (Kafka + Cassandra);
+Identity & Tenancy / Recipient Preferences stay on Postgres, looked up
+during dispatch. See [ADR 0008](../adr/0008-elastic-scale-data-plane.md) for
+why the hot path differs from the other two contexts.
+
 ```
 Client / API consumer
       │  (API key auth, Idempotency-Key header)
       ▼
- ┌─────────────┐     ┌──────────────┐
- │ API Service  │────▶│  PostgreSQL  │  via NotificationRepository port →
- │  (Fastify)   │     └──────────────┘  infra-postgres adapter. Outbox row
- └─────────────┘                        written in the same transaction.
-      │  outbox relay publishes via MessageBroker port
+ ┌─────────────┐   idempotency check via IdempotencyStore (Redis)
+ │ API Service  │   auth/rate-limit check via infra-postgres (identity)
+ │  (Fastify)   │
+ └─────────────┘
+      │  produces directly via MessageBroker port (idempotent producer,
+      │  keyed on tenantId + idempotencyKey) — no outbox, no relay
       ▼
  ┌───────────────────────────────────────┐
- │        infra-rabbitmq adapter          │
- │  exchange: notifications (topic)      │
- │  routing: sms.*, push.*  → per-channel│
- │  queue, each with a retry-delay queue │
- │  and a dead-letter queue              │
+ │          infra-kafka adapter           │
+ │  topic: sms.notify / push.notify      │
+ │  (N partitions, keyed by tenantId)    │
+ │  + retry-tier topics + DLQ topic      │
+ │  per channel                          │
  └───────────────────────────────────────┘
-      │                    │
-      ▼                    ▼
- ┌───────────┐       ┌───────────┐
- │ SMS Worker│       │Push Worker│   domain dispatch service: preference
- │(composition│      │(composition│   check → rate limit → send via gateway
- │   root)    │      │   root)    │   port → persist attempt, with retry
- └───────────┘       └───────────┘   + backoff + circuit breaker
-      │                    │
-      ▼                    ▼
- SmsGateway port      PushGateway port
- → providers-sms       → providers-push
- (Twilio | mock)        (FCM | mock)
-      └────────┬───────────┘
-               ▼
+      │                    │                    │
+      ▼                    ▼                    ▼
+ ┌───────────┐       ┌───────────┐       ┌──────────────┐
+ │ SMS Worker│       │Push Worker│       │  Projection  │  domain dispatch:
+ │(composition│      │(composition│      │  consumer     │  preference check
+ │   root)    │      │   root)    │      │  (composition │  (infra-postgres) →
+ └───────────┘       └───────────┘       │     root)     │  rate limit (Redis) →
+      │                    │             └──────────────┘  gateway port → persist
+      ▼                    ▼                    │          attempt (retry +
+ SmsGateway port      PushGateway port           ▼          backoff + breaker)
+ → providers-sms       → providers-push   ┌──────────────┐
+ (Twilio | mock)        (FCM | mock)      │  Cassandra   │  NotificationRequest /
+      └────────┬───────────┘              │(infra-cassandra)│ DeliveryAttempt
+               ▼                          └──────────────┘  read model
    DeliveryAttempt persisted via NotificationRepository port
-   status queryable via GET /v1/notifications/:id
+   (Cassandra); status queryable via GET /v1/notifications/:id
+   (eventually consistent with the Kafka log — see ADR 0008)
 ```
 
 ## Components
 
 | Component | Responsibility | Depends on (ports) |
 |---|---|---|
-| `services/api` | Accept notification requests, expose status/preferences endpoints, relay outbox to broker | `NotificationRepository`, `PreferenceRepository`, `MessageBroker`, `IdempotencyStore`, `RateLimiter` |
-| `services/worker-sms` | Consume `sms.*` queue, run dispatch, call SMS provider | `NotificationRepository`, `PreferenceRepository`, `RateLimiter`, `SmsGateway` |
-| `services/worker-push` | Consume `push.*` queue, run dispatch, call push provider | `NotificationRepository`, `PreferenceRepository`, `RateLimiter`, `PushGateway` |
+| `services/api` | Accept notification requests, expose status/preferences endpoints, produce directly to Kafka | `NotificationRepository` (read-only, status queries), `PreferenceRepository`, `MessageBroker`, `IdempotencyStore`, `RateLimiter` |
+| `services/worker-sms` | Consume `sms.notify` topic, run dispatch, call SMS provider | `NotificationRepository`, `PreferenceRepository`, `RateLimiter`, `SmsGateway` |
+| `services/worker-push` | Consume `push.notify` topic, run dispatch, call push provider | `NotificationRepository`, `PreferenceRepository`, `RateLimiter`, `PushGateway` |
+| `services/projection-notification` | Project `sms.notify`/`push.notify` events into the Cassandra read model | `NotificationRepository`, `MessageBroker` |
 | `domain-notification` | NotificationRequest/DeliveryAttempt entities, dispatch orchestration, retry policy, defines repository/broker/gateway ports | none (pure domain) |
 | `domain-preferences` | Recipient/Preference entities, quiet-hours logic, defines `PreferenceRepository` port | none (pure domain) |
 | `domain-identity` | Tenant/ApiKey entities, rate-limit policy | none (pure domain) |
-| `infra-postgres` | Implements repository ports via Prisma | PostgreSQL |
-| `infra-rabbitmq` | Implements `MessageBroker` port, owns queue/exchange topology | RabbitMQ |
+| `infra-postgres` | Implements repository ports for `domain-identity`/`domain-preferences` via Prisma | PostgreSQL |
+| `infra-cassandra` | Implements `NotificationRepository` for `domain-notification` (read-model projection) | Cassandra / ScyllaDB |
+| `infra-kafka` | Implements `MessageBroker` port, owns topic/partition/retry-topic topology | Kafka |
 | `infra-redis` | Implements `RateLimiter` and `IdempotencyStore` ports | Redis |
 | `providers-sms` | Implements `SmsGateway` port (Twilio + mock) | Twilio API |
 | `providers-push` | Implements `PushGateway` port (FCM + mock) | FCM API |
+
+`services/projection-notification` is a new composition root introduced by
+[ADR 0008](../adr/0008-elastic-scale-data-plane.md) — it is a queue-consumer
+worker like `worker-sms`/`worker-push`, not an HTTP service, so it follows
+the same "backend process" naming rule from
+[ADR 0001](../adr/0001-monorepo-structure.md#terminology).
 
 ## Cross-cutting concerns
 

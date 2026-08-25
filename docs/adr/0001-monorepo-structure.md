@@ -38,9 +38,11 @@ notification-system/
   services/                    composition roots — DI wiring + entrypoint only,
                                 no business logic
     api/                       Fastify HTTP API (ADR 0007)
-    worker-sms/                 consumes the sms.notify queue
-    worker-push/                 consumes the push.notify queue
-    worker-email/                 (Phase 2) consumes the email.notify queue
+    worker-sms/                 consumes the sms.notify topic
+    worker-push/                 consumes the push.notify topic
+    projection-notification/       consumes sms.notify/push.notify, projects
+                                    into the Cassandra read model (ADR 0008)
+    worker-email/                 (Phase 2) consumes the email.notify topic
     worker-inapp/                  (Phase 2) WebSocket gateway + feed consumer
   packages/
     domain-notification/       core domain: NotificationRequest/DeliveryAttempt,
@@ -49,14 +51,18 @@ notification-system/
     domain-identity/             Tenant/ApiKey domain + RateLimitPolicy
     domain-templates/             (Phase 2) Template/TemplateVersion domain
     shared-kernel/                 minimal cross-context value objects only
-    infra-postgres/             Prisma schema + repository port adapters (ADR 0003)
-    infra-rabbitmq/               MessageBroker port adapter (ADR 0002)
+    infra-postgres/             Prisma schema + repository port adapters for
+                                 domain-identity/domain-preferences (ADR 0003)
+    infra-cassandra/              NotificationRepository adapter for
+                                    domain-notification (ADR 0008)
+    infra-kafka/                   MessageBroker port adapter (ADR 0008,
+                                    superseding infra-rabbitmq / ADR 0002)
     infra-redis/                   RateLimiter / IdempotencyStore port adapters
     providers-sms/                 Twilio + mock SmsGateway adapters
     providers-push/                 FCM + mock PushGateway adapters
     providers-email/                 (Phase 2) SES/SendGrid + mock EmailGateway adapters
   infra/
-    docker-compose.yml           postgres, redis, rabbitmq, services/* containers
+    docker-compose.yml           postgres, cassandra, redis, kafka, services/* containers
   docs/
     architecture/                 system design docs
     adr/                          decision records (this file included)
