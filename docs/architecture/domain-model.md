@@ -100,6 +100,15 @@ infra-*, providers-*  ──implements──┘
 This is enforced going forward with a lint rule / dependency-cruiser config
 in Phase 0, so the boundary can't silently erode as the codebase grows.
 
+**Corollary: infra choice is per-context, not system-wide.** Because each
+context owns its own port and repository, different contexts are free to
+be backed by different storage technology, chosen for that context's own
+access pattern — nothing requires one database for the whole system. This
+is applied in practice in [ADR 0008](../adr/0008-elastic-scale-data-plane.md):
+`domain-notification` is backed by Kafka + Cassandra (its write-heavy,
+id-keyed hot path), while `domain-identity`/`domain-preferences` stay on
+Postgres.
+
 ## Where does new logic belong?
 
 The dependency-direction rule says *imports* aren't allowed to cross the

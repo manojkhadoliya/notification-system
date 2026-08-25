@@ -5,10 +5,15 @@
 Every entity in every bounded context is scoped by `tenantId` (owned by the
 Identity & Tenancy context, referenced by id from the others — see
 [`domain-model.md`](domain-model.md)). A single shared Postgres database
-and RabbitMQ broker serve all tenants in Phase 1 (pooled/shared
+(identity, preferences) and a single Kafka cluster + Cassandra cluster
+(notification delivery) serve all tenants in Phase 1 (pooled/shared
 infrastructure, not one stack per tenant) — appropriate for a portfolio
 demo; the ports/adapters boundary means a move to per-tenant isolation
-later is an infra-layer change, not a domain rewrite.
+later is an infra-layer change, not a domain rewrite. `tenantId` is also the
+Kafka partition key for notification topics (see
+[`messaging.md`](messaging.md)), so per-tenant throughput isolation and the
+elastic scale-out story from [ADR 0008](../adr/0008-elastic-scale-data-plane.md)
+share the same key, not two separate mechanisms.
 
 ## Auth
 

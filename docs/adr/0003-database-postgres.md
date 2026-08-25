@@ -1,7 +1,11 @@
 # ADR 0003: PostgreSQL as the primary datastore
 
 ## Status
-Accepted
+Accepted. Partially superseded by [ADR 0008](0008-elastic-scale-data-plane.md):
+`domain-notification`'s hot-path store moved to a wide-column store for
+elastic peak scale, and the transactional-outbox rationale below no longer
+applies to that context. This ADR's decision and rationale remain in force
+for `domain-identity` and `domain-preferences`, which keep Postgres.
 
 ## Context
 Every bounded context needs to persist structured, relational data

@@ -48,39 +48,40 @@ split into their own database later without a redesign.
 
 ## Notification Delivery (core domain)
 
-**NotificationRequest**
+Per [ADR 0008](../adr/0008-elastic-scale-data-plane.md), this context's
+data model is CQRS-shaped: Kafka (`sms.notify`/`push.notify` topics, see
+[`messaging.md`](messaging.md)) is the write/event side and the durable log
+of record; the tables below are the **read-model projection**, stored in a
+wide-column store (Cassandra/ScyllaDB via `infra-cassandra`), partitioned by
+id for the write-heavy, join-free access pattern this context has. There is
+no `Outbox` table — Kafka's own replication is the durability guarantee, so
+there's no second write to reconcile.
+
+**NotificationRequest** (partition key: `id`)
 | field | type | notes |
 |---|---|---|
-| id | uuid | pk |
+| id | uuid | partition key |
 | tenant_id | uuid | id-reference |
 | recipient_id | uuid | id-reference |
-| idempotency_key | text | unique per (tenant_id, idempotency_key) |
+| idempotency_key | text | dedup happens earlier, via `IdempotencyStore` (Redis), before this row is projected |
 | channel | enum | requested channel |
-| payload | jsonb | channel-specific content |
+| payload | jsonb-equivalent | channel-specific content |
 | status | enum | accepted \| queued \| dispatched \| delivered \| failed |
 | created_at | timestamptz | |
 
-**DeliveryAttempt**
+**DeliveryAttempt** (partition key: `notification_request_id`, clustering key: `attempt_number`)
 | field | type | notes |
 |---|---|---|
-| id | uuid | pk |
-| notification_request_id | uuid | fk → NotificationRequest (same context) |
-| attempt_number | int | |
+| notification_request_id | uuid | partition key — same-partition reads for "all attempts for this request," no join needed |
+| attempt_number | int | clustering key |
 | status | enum | sent \| failed \| delivered |
-| provider_response | jsonb nullable | raw provider response for debugging |
+| provider_response | text/blob nullable | raw provider response for debugging |
 | created_at | timestamptz | |
 
-**Outbox**
-| field | type | notes |
-|---|---|---|
-| id | uuid | pk |
-| notification_request_id | uuid | fk → NotificationRequest |
-| published | boolean | flipped by the outbox relay once sent to the broker |
-| created_at | timestamptz | |
-
-Written in the **same DB transaction** as `NotificationRequest` — this is
-the transactional outbox pattern, guaranteeing the API never persists a
-request without an eventual broker publish, even across a crash.
+`GET /v1/notifications/:id` reads this projection directly by partition key
+— fast, but eventually consistent with the Kafka log (see ADR 0008's
+consistency trade-off). Projection consumers upsert idempotently, so
+at-least-once redelivery from Kafka never produces duplicate rows.
 
 ## Templates (Phase 2)
 
@@ -90,8 +91,13 @@ until Phase 2.
 
 ## Notes
 
-- All timestamps are `timestamptz` (UTC).
-- Each bounded context is expected to live in its own Prisma schema module
-  under `infra-postgres`, even though Phase 1 runs them against a single
-  physical Postgres database — this keeps the option open to split into
-  separate databases later without touching domain code.
+- All timestamps are `timestamptz` (UTC), except in the Cassandra-backed
+  Notification Delivery tables, which use the store's native timestamp type.
+- `Identity & Tenancy` and `Recipient Preferences` each live in their own
+  Prisma schema module under `infra-postgres`, sharing one physical Postgres
+  database in Phase 1 — this keeps the option open to split into separate
+  databases later without touching domain code. `Notification Delivery` is
+  the one context that already lives on different physical infrastructure
+  (Kafka + Cassandra via `infra-kafka`/`infra-cassandra`), per
+  [ADR 0008](../adr/0008-elastic-scale-data-plane.md) — polyglot persistence
+  chosen per context's access pattern, not a system-wide default.

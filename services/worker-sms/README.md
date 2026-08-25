@@ -1,10 +1,12 @@
 # services/worker-sms
 
-Consumes the `sms.notify` queue and dispatches SMS notifications. A
+Consumes the `sms.notify` topic and dispatches SMS notifications. A
 **composition root**: wires the `domain-notification` dispatch service
 (preference check → rate limit → send → persist attempt) to
-`infra-postgres`, `infra-rabbitmq`, `infra-redis`, and `providers-sms`, and
-runs the retry/backoff/circuit-breaker loop around it.
+`infra-cassandra`, `infra-postgres` (preferences), `infra-kafka`,
+`infra-redis`, and `providers-sms`, and runs the retry-topic/backoff/
+circuit-breaker loop around it (see
+[ADR 0008](../../docs/adr/0008-elastic-scale-data-plane.md)).
 
 **Depends on (ports):** `NotificationRepository`, `PreferenceRepository`,
 `MessageBroker`, `RateLimiter`, `SmsGateway`.

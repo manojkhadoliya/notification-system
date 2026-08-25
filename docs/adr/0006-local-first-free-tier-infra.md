@@ -1,7 +1,12 @@
 # ADR 0006: Local-first, free-tier infrastructure
 
 ## Status
-Accepted
+Accepted. The local-first/free-tier *principle* below still holds; the
+specific component list in "Decision" is updated by
+[ADR 0008](0008-elastic-scale-data-plane.md) (Kafka + Cassandra replace
+RabbitMQ for the notification-delivery hot path) — see that ADR for why,
+and [`infra-strategy.md`](../architecture/infra-strategy.md) for the
+current component/free-tier table.
 
 ## Context
 This is an unfunded portfolio project — no ongoing cloud spend is

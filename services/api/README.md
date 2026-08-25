@@ -4,11 +4,16 @@ Fastify HTTP API — the entry point for notification requests and
 preference management. A **composition root**: contains no business logic
 itself, just route handlers that call into `domain-notification`,
 `domain-preferences`, and `domain-identity`, wired to concrete adapters
-(`infra-postgres`, `infra-rabbitmq`, `infra-redis`) at startup via
-dependency injection.
+(`infra-postgres`, `infra-kafka`, `infra-redis`) at startup via dependency
+injection. Produces accepted notification requests directly to Kafka — no
+outbox table, no relay process (see
+[ADR 0008](../../docs/adr/0008-elastic-scale-data-plane.md)).
 
-**Depends on (ports):** `NotificationRepository`, `PreferenceRepository`,
-`ApiKeyRepository`, `MessageBroker`, `IdempotencyStore`, `RateLimiter`.
+**Depends on (ports):** `NotificationRepository` (read-only — status
+queries), `PreferenceRepository`, `ApiKeyRepository`, `MessageBroker`,
+`IdempotencyStore`, `RateLimiter`. `POST /v1/notifications` only ever
+writes through `MessageBroker`; `NotificationRepository` is used solely by
+`GET /v1/notifications/:id`, reading the `infra-cassandra` projection.
 
 **Endpoints:** see [`../../docs/architecture/api-spec.md`](../../docs/architecture/api-spec.md).
 

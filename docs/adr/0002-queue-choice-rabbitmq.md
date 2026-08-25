@@ -1,7 +1,11 @@
 # ADR 0002: RabbitMQ as the message broker
 
 ## Status
-Accepted
+Accepted for the portfolio/local-first scope this ADR was written against.
+Superseded by [ADR 0008](0008-elastic-scale-data-plane.md), which replaces
+RabbitMQ with Kafka to support elastic peak scale-out. Rationale below is
+kept intact as the record of why RabbitMQ was the right call for that
+earlier scope.
 
 ## Context
 Notification dispatch needs async delivery, per-channel routing, retry
