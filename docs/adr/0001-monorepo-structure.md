@@ -1,7 +1,7 @@
 # ADR 0001: Monorepo with pnpm workspaces, services/ + packages/
 
 ## Status
-In Progress
+Accepted
 
 ## Context
 The system is split into several independently deployable backend
