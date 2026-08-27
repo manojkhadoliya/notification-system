@@ -41,6 +41,25 @@ the command is even published. This is a **correctness invariant** — claim
 placement and claim key shape don't get revisited without new evidence
 that the failure mode itself has changed, unlike the tuning choices below.
 
+**Implementation note, added during Phase 1 (`domain-notification`'s
+`DispatchService`):** the claim key has no `attemptNumber` — it's
+`(tenantId, notificationRequestId, recipientId, channel)`, full stop (see
+[`data-model.md`](../architecture/data-model.md#notification-delivery-core-domain)).
+Read literally, "claim before every gateway call" would mean a legitimate
+retry (attempt 2, after attempt 1's provider call genuinely failed) finds
+the key already taken and incorrectly treats that as "already sent."
+`DispatchService` resolves this by claiming only on `attemptNumber === 1`;
+later attempts are the same logical send already holding the claim, and go
+straight to the gateway call. This still closes the gap this ADR names — a
+Kafka redelivery of the *same* attempt-1 message finds the claim taken and
+skips the gateway call — it just doesn't additionally block a *different*,
+later attempt from proceeding. **This is a Phase 1 implementation decision,
+not a re-litigation of the invariant above**, but it's the kind of detail
+the invariant's key shape left implicit; flagged here so it's reviewed
+deliberately rather than inherited from a code comment. The alternative —
+a claim that tracks in-flight/succeeded status instead of a one-shot
+insert — is a real option if this reading turns out to be wrong.
+
 **Retry topology.** One process per channel, not one per tier: each
 channel worker (`worker-sms`, `worker-push`, `worker-email`,
 `worker-inapp`) subscribes to its own `command.{channel}` topic and all

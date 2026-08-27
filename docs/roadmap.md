@@ -53,22 +53,38 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       no domain model to wait on; real working code, not a Phase 1 stub —
       see [`packages/observability/README.md`](../packages/observability/README.md)
 - [x] CI skeleton: lint + typecheck on push (`.github/workflows/ci.yml`) —
-      runs `pnpm format` / `pnpm lint` / `pnpm typecheck` / `pnpm
-      boundaries`, all four verified locally before being wired into the
-      workflow
+      runs `pnpm format` / `pnpm lint` / `pnpm typecheck` / `pnpm test` /
+      `pnpm boundaries` (the `test` step added once Phase 1's domain
+      packages had real unit tests to run), all verified locally before
+      being wired into the workflow
 
 ## Phase 1 — Full local build, all channels
-- [ ] `domain-notification`: entities, value objects, ports
-      (`NotificationRepository`, `DedupeRepository`,
-      `ScheduledNotificationRepository`, `MessageBroker`, `SmsGateway`,
-      `PushGateway`, `EmailGateway`, `InAppGateway`, `RetryPolicy`)
-- [ ] `domain-preferences`: `Recipient`/`Preference` entities,
-      `PreferenceRepository` port, quiet-hours logic (`fallback_order`
-      column reserved on `Preference`, not read yet — see
-      [`architecture/domain-model.md`](architecture/domain-model.md#recipient-preferences))
-- [ ] `domain-identity`: `Tenant`/`ApiKey` entities, `RateLimitPolicy`
-- [ ] `domain-templates`: `Template`/`TemplateVersion`/`Locale` entities,
-      `TemplateRepository` port
+- [x] `domain-notification`: entities (`NotificationRequest`,
+      `DeliveryAttempt`, `ScheduledNotification`), value objects
+      (`RetryPolicy`, `DedupeClaim`, `RoutingDecision`, `BroadcastRequest`/
+      `Chunk`, `ChannelCommand`), ports (`NotificationRepository`,
+      `DedupeRepository`, `ScheduledNotificationRepository`,
+      `MessageBroker`, `SmsGateway`/`PushGateway`/`EmailGateway`/
+      `InAppGateway`, a context-local `RateLimiter` — see its doc comment
+      for why it's not imported from `domain-identity`), and the dispatch
+      orchestration service (`DispatchService`: dedupe claim → rate limit
+      → send → persist). 27 unit tests, including `DispatchService`
+      exercised entirely against in-memory fake ports. **Note:** the
+      dedupe-claim attempt-scoping question this surfaced is recorded in
+      [ADR 0010](adr/0010-delivery-reliability.md), not just a code
+      comment — worth a deliberate look, not just inheriting the call made
+      here
+- [x] `domain-preferences`: `Recipient`/`Preference` entities,
+      `PreferenceRepository` port, quiet-hours logic (`isWithinQuietHours`,
+      handling the overnight-wraparound case correctly — 13 unit tests).
+      `fallback_order` column reserved on `Preference`, not read yet — see
+      [`architecture/domain-model.md`](architecture/domain-model.md#recipient-preferences).
+      `RecipientKeyRepository` port declared (still deferred — ADR 0013)
+- [x] `domain-identity`: `Tenant`/`ApiKey` entities, `RateLimitPolicy`,
+      `RateLimiter` port, `TenantRepository`/`ApiKeyRepository` ports
+- [x] `domain-templates`: `Template`/`TemplateVersion`/`Locale` entities,
+      `TemplateRepository` port. Rendering itself (Handlebars) is
+      deliberately not here — see the Handlebars line further down
 - [ ] `infra-postgres`: Prisma schema + repository adapters for
       `domain-identity`, `domain-preferences`, `domain-templates`, and —
       for Phase 1 — `domain-notification`'s `NotificationRepository` /
@@ -95,7 +111,10 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       **The single largest structural item in this phase.**
 - [ ] Dedupe claim (`DedupeRepository`), wired into every `worker-*`
       immediately before the gateway call — see
-      [ADR 0010](adr/0010-delivery-reliability.md)
+      [ADR 0010](adr/0010-delivery-reliability.md). The orchestration
+      itself (`domain-notification`'s `DispatchService`) is already built
+      and tested (above); what's left is `infra-postgres`'s
+      `DedupeRepository` adapter and each worker's composition-root wiring
 - [ ] `scheduled_notifications` table + `services/scheduler` (new) —
       poller sharded by `(due_minute, bucket)`, jittered `due_at` from the
       start — see [ADR 0011](adr/0011-scheduling-and-fanout.md)
@@ -119,7 +138,9 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       [ADR 0012](adr/0012-inapp-gateway-split.md)
 - [ ] Template rendering (Handlebars) wired into the router for
       template-driven requests
-- [ ] Unit tests: domain services, adapters
+- [ ] Unit tests: domain services (✅ done for all four `domain-*`
+      packages, above — 53 tests via `node:test`, `pnpm test`), adapters
+      (not yet — no adapters exist yet)
 - [ ] Integration tests: API/producer library → event backbone → router →
       command topic → worker/projection consumer → mock provider;
       dedupe-claim redelivery test (same request id twice sends once);

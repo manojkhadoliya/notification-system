@@ -39,7 +39,12 @@ module.exports = {
       name: "no-orphans",
       comment:
         "A source file nothing imports and that imports nothing else is either " +
-        "dead code or missing from its package's public entrypoint.",
+        "dead code or missing from its package's public entrypoint. Expect " +
+        "false positives here for files whose only consumer imports them " +
+        "with `import type` (erased at compile time, so this tool — without " +
+        "tsPreCompilationDeps, see the options comment below — doesn't count " +
+        "it as a real edge) — e.g. most domain-*/ports.ts files. Worth a scan " +
+        "on every report, not worth chasing to zero.",
       severity: "warn",
       from: {
         orphan: true,
