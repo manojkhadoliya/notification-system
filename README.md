@@ -23,9 +23,11 @@ see [`docs/roadmap.md`](docs/roadmap.md) for the build plan.
 - [`docs/architecture/api-spec.md`](docs/architecture/api-spec.md) — Phase 1
   HTTP API
 - [`docs/architecture/messaging.md`](docs/architecture/messaging.md) —
-  queue topology, retry/DLQ design
+  event/command topology, router, retry/DLQ design
 - [`docs/architecture/multi-tenancy.md`](docs/architecture/multi-tenancy.md)
   — tenant auth, idempotency, rate limiting
+- [`docs/architecture/data-privacy.md`](docs/architecture/data-privacy.md)
+  — erasure against the event log (designed, build deferred)
 - [`docs/architecture/infra-strategy.md`](docs/architecture/infra-strategy.md)
   — local-first / free-tier plan and future migration path
 - [`docs/architecture/scaling-strategy.md`](docs/architecture/scaling-strategy.md)
@@ -55,7 +57,9 @@ its responsibility and which phase brings it to life.
 
 ## Tech stack (planned)
 
-Node.js / TypeScript, Fastify, PostgreSQL (Prisma) + Cassandra/ScyllaDB
-(polyglot persistence per bounded context, see
-[ADR 0003](docs/adr/0003-polyglot-persistence.md)), Kafka, Redis, Docker
-Compose for local dev, free-tier hosting for the public demo.
+Node.js / TypeScript, Fastify, PostgreSQL (Prisma) — including
+notification-delivery's read model for Phase 1, with Cassandra/ScyllaDB
+adopted later at a measured threshold (polyglot persistence per bounded
+context, see [ADR 0003](docs/adr/0003-polyglot-persistence.md), revised) —
+Kafka, Redis, Docker Compose for local dev, free-tier hosting for the
+public demo.

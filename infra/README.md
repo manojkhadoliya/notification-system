@@ -2,11 +2,14 @@
 
 Local infrastructure definitions. Phase 0 adds a `docker-compose.yml` here
 running:
-- `postgres` (official image — identity, preferences, templates)
-- `cassandra` (official image, single node — notification delivery read model)
+- `postgres` (official image — identity, preferences, templates, and,
+  for Phase 1, notification delivery's read model too; no `cassandra`
+  service until a threshold is crossed — see
+  [`scaling-strategy.md`](../docs/architecture/scaling-strategy.md#storage-phasing))
 - `redis` (official image)
 - `kafka` (official image, KRaft mode)
-- `api`, `worker-sms`, `worker-push`, `worker-email`, `worker-inapp`,
+- `api`, `router`, `scheduler`, `fanout-expander`, `worker-sms`,
+  `worker-push`, `worker-email`, `worker-inapp`, `inapp-gateway`,
   `projection-notification` (built from this repo, once they exist)
 
 This is the only infrastructure defined in code for now — the hosted

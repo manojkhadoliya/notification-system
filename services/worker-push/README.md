@@ -1,18 +1,25 @@
 # services/worker-push
 
-Consumes the `push.notify` topic and dispatches push notifications. A
+Consumes `command.push` and its retry tiers
+(`command.push.retry-30s/-5m/-30m`) and dispatches push notifications. A
 **composition root**: wires the `domain-notification` dispatch service
-(preference check → rate limit → send → persist attempt) to
-`infra-cassandra`, `infra-postgres` (preferences), `infra-kafka`,
-`infra-redis`, and `providers-push`, and runs the retry-topic/backoff/
-circuit-breaker loop around it (see
-[ADR 0002](../../docs/adr/0002-message-broker-kafka.md)). Structurally
-identical to `services/worker-sms`, differing only in the gateway port it's
-wired to.
+(dedupe claim → rate limit → send → persist attempt) to `infra-postgres`
+(dedupe claims, delivery attempts, and — Phase 1 — the notification
+read model), `infra-kafka`, `infra-redis`, and `providers-push`, and runs
+the retry-tier/backoff/circuit-breaker loop itself — one process handling
+all of this channel's tiers, not a separate process per tier (see
+[ADR 0010](../../docs/adr/0010-delivery-reliability.md)). Structurally
+identical to `services/worker-sms`, differing only in the gateway port
+it's wired to.
 
-**Depends on (ports):** `NotificationRepository`, `PreferenceRepository`,
-`MessageBroker`, `RateLimiter`, `PushGateway`.
+The message this worker consumes already carries the fully rendered
+payload, and preference/quiet-hours checks already happened upstream, in
+`services/router` — see
+[ADR 0009](../../docs/adr/0009-event-backbone-router.md).
+
+**Depends on (ports):** `DedupeRepository`, `MessageBroker`, `RateLimiter`,
+`PushGateway`.
 
 **Delivered in:** Phase 1 (see [`../../docs/roadmap.md`](../../docs/roadmap.md)).
-See queue topology and retry/DLQ design in
+See topic layout, dedupe claim, and retry topology in
 [`../../docs/architecture/messaging.md`](../../docs/architecture/messaging.md).

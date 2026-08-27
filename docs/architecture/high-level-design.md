@@ -18,11 +18,24 @@ growth story this constraint drives.
 
 ## 2. Functional requirements
 
-- Accept a notification request (`POST /v1/notifications`), tenant-
-  authenticated, idempotent under client retries.
-- Respect recipient preferences: channel opt-in/out, quiet hours.
-- Deliver reliably: retry with backoff, dead-letter after max attempts.
-- Track and query delivery status per request.
+- Accept a notification intent — over HTTP (`POST /v1/notifications`,
+  tenant-authenticated, idempotent under client retries) or from an
+  internal service via a producer library — and centrally decide the
+  channel, not just accept whatever the caller names. See
+  [`messaging.md`](messaging.md#two-doors-onto-one-backbone).
+- Respect recipient preferences before a message is committed to a channel,
+  not after: channel opt-in/out, and quiet hours that actually defer
+  (rather than silently drop) via a scheduled re-emit. See
+  [`messaging.md`](messaging.md#router).
+- Broadcast one event to many recipients via server-side fan-out, not one
+  client call per recipient. See
+  [`messaging.md`](messaging.md#fan-out--one-event-many-recipients).
+- Deliver reliably: worker-side dedupe claim before every provider call
+  (not just ingest-time dedup), retry with backoff, dead-letter after max
+  attempts. See [ADR 0010](../adr/0010-delivery-reliability.md).
+- Track and query delivery status per request, written by exactly one
+  ordered, non-regressing writer. See
+  [ADR 0010](../adr/0010-delivery-reliability.md#single-writer-status).
 - Support template-driven content, versioned so edits don't retroactively
   change already-sent requests.
 - In-app feed: list, read, unread count.
@@ -51,16 +64,25 @@ Using the growth curve from [`scaling-strategy.md`](scaling-strategy.md):
 |---|---|---|
 | Users (recipients) | ~100 | ~1,000,000 |
 | Peak notifications/sec | <10 | ~1,000 (industry ballpark, not a hard target) |
-| Notifications/day at peak-ish sustained rate | negligible | ~50-80M (illustrative, at a few hundred/sec average) |
+| Notifications/day, honest average | negligible | ~1-5M/day, **~12-60/sec average** |
+
+**Corrected from an earlier estimate:** a prior version of this table read
+"~50-80M notifications/day," which implies 26-80 sends per user per day —
+realistic consumer platforms run 1-5/day. See
+[`scaling-strategy.md`](scaling-strategy.md#storage-phasing) for why this
+correction is what justifies starting `domain-notification`'s read model on
+Postgres (Phase 1) rather than Cassandra (deferred to a measured
+threshold) — see [ADR 0003](../adr/0003-polyglot-persistence.md), revised.
 
 **Storage, back-of-envelope:** each notification produces one
-`NotificationRequest` row + 1-2 `DeliveryAttempt` rows in Cassandra, roughly
-1-2 KB combined (payload + metadata + provider response). At an illustrative
-sustained average in the low hundreds/sec, that's on the order of tens of
-GB/day of new data at the target horizon. Cassandra absorbs this by adding
-nodes (a capacity lever, not a redesign — see
-[`scaling-strategy.md`](scaling-strategy.md)), but unbounded growth is still
-a cost problem worth a policy: see the retention/TTL note in
+`NotificationRequest` row + 1-2 `DeliveryAttempt` rows, roughly 1-2 KB
+combined (payload + metadata + provider response). At the honest average
+above, that's on the order of low single-digit GB/day of new data at the
+target horizon — comfortably inside a single Postgres instance; see the
+storage-phasing thresholds in
+[`scaling-strategy.md`](scaling-strategy.md#storage-phasing) for when that
+changes. Unbounded growth is still a cost problem worth a policy regardless
+of store: see the retention/TTL note in
 [`data-model.md`](data-model.md#notes).
 
 **Read:write ratio** differs sharply by context, which is *why* the
@@ -75,52 +97,73 @@ dispatch volume (see [`scaling-strategy.md`](scaling-strategy.md#keeping-postgre
 ## 5. High-level architecture
 
 ```
-                          ┌─────────────────────┐
-   Client / API  ───────▶ │   services/api        │  auth + idempotency +
-   consumer               │   (Fastify)            │  rate-limit checked here
-                          └──────────┬─────────────┘
-                                     │ produce (recipientId-keyed)
-                                     ▼
-                          ┌─────────────────────┐
-                          │        Kafka           │  durable log of record
-                          │  (per-channel topics,  │  (no outbox — see ADR 0008)
-                          │   retry tiers, DLQ)    │
-                          └──────────┬─────────────┘
-                     ┌───────────────┼───────────────┐
-                     ▼               ▼               ▼
-             ┌───────────┐   ┌───────────┐   ┌──────────────┐
-             │  Workers    │   │ Projection  │   │  (identity /   │
-             │ (per channel│   │  consumer   │   │   preferences /│
-             │  dispatch)  │   │             │   │   templates —  │
-             └──────┬──────┘   └──────┬──────┘   │   Postgres,     │
-                    ▼                 ▼          │   Redis-cached) │
-             ┌───────────┐   ┌───────────────┐   └──────────────┘
-             │  Provider   │   │   Cassandra    │        ▲
-             │ (Twilio/FCM/│   │ (status + feed │        │ read on every
-             │  SES/socket)│   │   read model)  │        │ dispatch/request
-             └───────────┘   └───────────────┘◀──────────┘
+   Client / API           Internal service
+   consumer (Door 1) ─┐   (Door 2, no HTTP hop) ─┐
+   auth + idempotency │   producer library        │
+   + rate-limit here  │                            │
+                       └──────────┬─────────────────┘
+                                  │ produce (recipientId-keyed)
+                                  ▼
+                       ┌─────────────────────┐
+                       │        Kafka           │  events.{critical|standard|bulk}
+                       │   event backbone        │  durable log of record
+                       └──────────┬─────────────┘  (no outbox — see ADR 0008/0009)
+                                  ▼
+                       ┌─────────────────────┐
+                       │   services/router      │  preferences + quiet hours +
+                       │   (single decision      │  channel resolution + template
+                       │    point)               │  render → self-contained command
+                       └──────────┬─────────────┘
+                                  ▼
+                       ┌─────────────────────┐
+                       │        Kafka           │  command.{sms|push|email|in_app}
+                       │   command topics        │  + retry tiers + DLQ, per channel
+                       └──────────┬─────────────┘
+                     ┌────────────┼────────────┐
+                     ▼            ▼            ▼
+             ┌───────────┐ ┌────────────┐ ┌──────────────┐
+             │  Workers    │ │  Status     │ │  (identity /   │
+             │ (dedupe     │ │  projection │ │   preferences /│
+             │  claim →    │ │  (single    │ │   templates —  │
+             │  dispatch)  │ │  writer)    │ │   Postgres,     │
+             └──────┬──────┘ └──────┬──────┘ │   Redis-cached) │
+                    ▼               ▼        └──────────────┘
+             ┌───────────┐ ┌───────────────┐        ▲
+             │  Provider   │ │   Postgres     │        │ read on every
+             │ (Twilio/FCM/│ │ (status + feed │        │ dispatch/request
+             │  SES/socket)│ │  read model —   │        │
+             └───────────┘ │  Cassandra at a │◀──────────┘
+                            │  threshold, see │
+                            │  scaling-strategy)│
+                            └───────────────┘
                                      ▲
                                      │ GET /v1/notifications/:id,
                                      │ GET /v1/feed/:recipientId
                               (back to services/api)
 ```
 
-This is the simplified view. The exact topic/partition/consumer-group
-layout is in [`messaging.md`](messaging.md); the exact component-to-port
-map is in [`overview.md`](overview.md); the full per-entity schema is in
+This is the simplified view — it omits the fan-out expander and scheduler
+(see [`messaging.md`](messaging.md#fan-out--one-event-many-recipients) and
+[`messaging.md`](messaging.md#router)) and the in-app gateway split (see
+[ADR 0012](../adr/0012-inapp-gateway-split.md)). The exact
+topic/partition/consumer-group layout is in
+[`messaging.md`](messaging.md); the exact component-to-port map is in
+[`overview.md`](overview.md); the full per-entity schema is in
 [`data-model.md`](data-model.md).
 
 ## 6. API design (summary)
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /v1/notifications` | Accept a request; `202` means durably logged to Kafka |
+| `POST /v1/notifications` | Door 1 — accept an intent (one recipient, optional channel override); `202` means durably produced to the event backbone |
 | `GET /v1/notifications/:id` | Status + attempt history (eventually consistent) |
 | `GET/PUT /v1/preferences/:recipientId` | Opt-in/out, quiet hours |
 | `POST /v1/templates`, `POST /v1/templates/:id/versions`, `GET /v1/templates/:id` | Template management |
 | `GET /v1/feed/:recipientId`, `POST /v1/feed/:recipientId/:id/read` | In-app feed |
 | `POST /v1/webhooks/twilio` | Delivery confirmation callback |
 
+Door 2 (internal services, broadcast, no HTTP endpoint) is a producer
+library — see [`messaging.md`](messaging.md#two-doors-onto-one-backbone).
 Full request/response shapes: [`api-spec.md`](api-spec.md).
 
 ## 7. Data model (summary)
@@ -131,8 +174,8 @@ contexts by id only (never a join) — see
 
 | Context | Store | Key entities |
 |---|---|---|
-| Notification Delivery | Kafka (write) + Cassandra (read) | NotificationRequest, DeliveryAttempt, NotificationFeedItem |
-| Recipient Preferences | Postgres | Recipient, Preference |
+| Notification Delivery | Kafka (write) + Postgres, Phase 1 (read — Cassandra at a measured threshold) | NotificationRequest, DeliveryAttempt, DedupeClaim, ScheduledNotification, NotificationFeedItem |
+| Recipient Preferences | Postgres | Recipient, Preference, RecipientKey (designed, build deferred) |
 | Identity & Tenancy | Postgres | Tenant, ApiKey |
 | Templates | Postgres | Template, TemplateVersion |
 
@@ -147,8 +190,13 @@ Full schema: [`data-model.md`](data-model.md).
 | HTTP framework | Fastify, long-lived process | Async-native, plugin-scoped encapsulation matches bounded contexts, no Lambda cold-start/connection-pool fight | [ADR 0007](../adr/0007-http-framework-fastify.md) |
 | Channel rollout | All four channels together, one local-only phase | Gateway ports were already additive; no de-risking benefit left to phasing | [ADR 0004](../adr/0004-channel-rollout.md) |
 | Message broker | Kafka | A partitioned log scales dispatch by adding partitions/consumers, not by redesigning the broker | [ADR 0002](../adr/0002-message-broker-kafka.md) |
-| Datastores | PostgreSQL (identity/preferences/templates) + Cassandra (notification-delivery), chosen per context | Each context's own access pattern decides its store; nothing requires one database system-wide | [ADR 0003](../adr/0003-polyglot-persistence.md) |
-| Notification-delivery data flow | CQRS: Kafka is the write/event log, Cassandra is the read projection | No dual-write coordination problem; read and write scale independently | [ADR 0008](../adr/0008-notification-delivery-cqrs.md) |
+| Datastores | PostgreSQL for identity/preferences/templates, and — Phase 1 — notification-delivery's read model; Cassandra deferred to a measured threshold | Each context's own access pattern decides its store; the honest capacity estimate (§4) doesn't justify Cassandra on day one | [ADR 0003](../adr/0003-polyglot-persistence.md) (revised) |
+| Notification-delivery data flow | CQRS: Kafka is the write/event log, the projection is a read model the delivery path never depends on | No dual-write coordination problem; read and write scale independently; workers don't race the projection for payload | [ADR 0008](../adr/0008-notification-delivery-cqrs.md), [ADR 0009](../adr/0009-event-backbone-router.md) |
+| Ingress + routing | Two doors (tenant API + internal producer library) onto one event backbone; a single router decides channel/quiet-hours/template before anything reaches a channel topic | Centralizes the decisions every worker used to make independently, after commit | [ADR 0009](../adr/0009-event-backbone-router.md) |
+| Delivery reliability | Worker-side dedupe claim before the provider call; one retry-aware consumer per channel; single-writer ordered status | Ingest-time dedup doesn't protect the actual send; two independent status writers can regress a row | [ADR 0010](../adr/0010-delivery-reliability.md) |
+| Scheduling + broadcast | `scheduled_notifications` (sharded, jittered poller) for deferral; server-side chunked fan-out, Door 2 only, for broadcast | Quiet hours needs something to defer to; one API call per recipient doesn't scale | [ADR 0011](../adr/0011-scheduling-and-fanout.md) |
+| In-app delivery | Stateless `inapp-gateway` (sockets) split from `worker-inapp` (feed writes), connected by Redis pub/sub | Connection count and dispatch throughput don't share a scaling axis | [ADR 0012](../adr/0012-inapp-gateway-split.md) |
+| Data erasure | Per-recipient crypto-shredding — designed now, build deferred | An immutable event log can't honor row-level deletion; destroying a key can | [ADR 0013](../adr/0013-crypto-shredding-erasure.md) |
 | Kafka partition key | `recipientId`, not `tenantId` | A tenant-keyed partition caps one large tenant's throughput regardless of partition count | [`scaling-strategy.md`](scaling-strategy.md#why-the-kafka-partition-key-is-recipientid-not-tenantid) |
 | Deployment target | Local Docker Compose now; hosted demo/paid-cloud deferred, unphased | Channel breadth and deployment target are separate axes; only the former is committed to | [ADR 0006](../adr/0006-local-first-free-tier-infra.md) |
 
@@ -157,23 +205,44 @@ Full schema: [`data-model.md`](data-model.md).
 Stated plainly rather than glossed over:
 
 - **Eventual consistency window** on status reads — a `GET` immediately
-  after `202 Accepted` can briefly 404. Mitigated (idempotent, QUORUM-
-  consistent projection), not eliminated.
+  after `202 Accepted` can briefly 404. Mitigated (idempotent, ordered-
+  state-machine projection), not eliminated. This is now purely a read-side
+  property — nothing on the delivery path waits on it. See
+  [ADR 0010](../adr/0010-delivery-reliability.md#single-writer-status).
 - **Redis hot-key risk** for one extreme-volume tenant's rate-limit
   counter — identified mitigation (sharded sub-buckets), not built, because
   no current tenant profile demands it.
-- **No retention policy sized yet** for the Cassandra tables — flagged in
-  [`data-model.md`](data-model.md#notes), not yet a specific TTL number.
-- **Single Postgres instance** for identity/preferences/templates — correct
-  at the designed scale (see capacity estimation above), would need a read
-  replica or managed HA only if those specific contexts' *read* volume ever
-  outgrew what Redis caching absorbs, which isn't expected from notification
-  volume growth alone.
+- **Cross-tenant provider fairness is unsolved.** Per-tenant rate limits
+  cap a tenant against itself, not against the shared Twilio/FCM quota
+  every other tenant draws from. Documented, not built — see
+  [`scaling-strategy.md`](scaling-strategy.md#whats-an-explicit-known-trade-off--not-solved-here).
+- **Erasure against the event log is designed but not built.**
+  Payload-by-reference narrows the PII footprint; per-recipient
+  crypto-shredding is the full answer, fully specified in
+  [ADR 0013](../adr/0013-crypto-shredding-erasure.md), scheduled as future
+  work rather than Phase 1.
+- **No retention policy sized yet** for `domain-notification`'s read-model
+  tables — flagged in [`data-model.md`](data-model.md#notes), not yet a
+  specific TTL number.
+- **Single Postgres instance** for identity/preferences/templates, and —
+  for Phase 1 — notification-delivery's read model too. Correct at the
+  designed scale (see the corrected capacity estimation in §4); would need
+  a read replica, managed HA, or the Cassandra move only past the
+  thresholds in [`scaling-strategy.md`](scaling-strategy.md#storage-phasing).
 - **Real provider throughput ceilings** (Twilio, FCM, SES) are far below
   anything this system's architecture is concerned with — a partnerships/
   multi-account problem, not a software one.
+- **Every throughput/capacity figure in this document is illustrative, not
+  measured** — see
+  [`scaling-strategy.md`](scaling-strategy.md#whats-an-explicit-known-trade-off--not-solved-here).
+  Phase 1's load-test step is what replaces arithmetic with evidence.
 
 ## 10. Future work
 
-Not phased, not committed to — see [`roadmap.md`](../roadmap.md#future-work-not-phased--introduce-later-if-needed):
-hosted free-tier demo, paid-cloud scale-out.
+Not phased, not committed to — see
+[`roadmap.md`](../roadmap.md#future-work-not-phased--introduce-later-if-needed):
+independent audit/analytics consumer groups, channel fallback, the
+crypto-shredding build (design is done — see
+[ADR 0013](../adr/0013-crypto-shredding-erasure.md)), the Cassandra
+adapter for `domain-notification` (at a measured threshold), cross-tenant
+provider fairness, hosted free-tier demo, paid-cloud scale-out.

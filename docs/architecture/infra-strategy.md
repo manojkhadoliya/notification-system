@@ -22,14 +22,24 @@ changing wiring/env vars. It never means touching `domain-*` code.
 
 ```
 docker-compose.yml runs:
-  postgres   (official image — domain-identity, domain-preferences, domain-templates)
-  cassandra  (official image, single node — domain-notification read model)
-  redis      (official image — rate limiting, idempotency, and the
-              read-through cache in front of postgres)
+  postgres   (official image — domain-identity, domain-preferences,
+              domain-templates, and — Phase 1 — domain-notification's
+              read model too; Cassandra deferred, see
+              scaling-strategy.md#storage-phasing and ADR 0003 revised)
+  redis      (official image — rate limiting, idempotency, the
+              read-through cache in front of postgres, and pub/sub for
+              worker-inapp <-> inapp-gateway)
   kafka      (official image, KRaft mode — no separate Zookeeper needed)
-  api, worker-sms, worker-push, worker-email, worker-inapp,
+  api, router, scheduler, fanout-expander,
+  worker-sms, worker-push, worker-email, worker-inapp, inapp-gateway,
   projection-notification (built from this repo)
 ```
+
+No `cassandra` service in Phase 1 — `infra-cassandra`'s port shape is
+reserved (see [`overview.md`](overview.md#components)) but the adapter and
+container are only added once a threshold in
+[`scaling-strategy.md`](scaling-strategy.md#storage-phasing) is actually
+crossed, not before.
 
 PgBouncer (connection pooling — see
 [`scaling-strategy.md`](scaling-strategy.md#keeping-postgres-off-the-hot-path))
@@ -61,7 +71,7 @@ a paid/scaled equivalent:
 | Compute | Fly.io / Railway free tier | AWS ECS Fargate | redeploy container image, no code change |
 | Postgres (identity, preferences, templates) | Supabase or Neon free tier | AWS RDS (+ PgBouncer/RDS Proxy) | connection string swap (both are vanilla Postgres) |
 | Broker (notification delivery) | Upstash Kafka or Confluent Cloud free tier | Confluent Cloud (dedicated) / Amazon MSK | connection string + credentials swap (both speak the Kafka protocol) |
-| Wide-column store (notification delivery) | DataStax Astra DB free tier | Astra DB (paid) / self-hosted Scylla cluster | connection string swap (Astra is managed Cassandra) |
+| Wide-column store (notification delivery, once adopted — see [`scaling-strategy.md`](scaling-strategy.md#storage-phasing)) | DataStax Astra DB free tier | Astra DB (paid) / self-hosted Scylla cluster | connection string swap (Astra is managed Cassandra) |
 | Cache | Upstash free tier | AWS ElastiCache | connection string swap (both are Redis-compatible) |
 
 Because every one of these is used via its vanilla open protocol (not a

@@ -79,6 +79,35 @@ that actually matters — one recipient's notifications process in order —
 is preserved (tenant-wide ordering across different recipients was never a
 real requirement). See [`messaging.md`](messaging.md) for the topic layout.
 
+## Storage phasing — Notification Delivery's read model
+
+[ADR 0003](../adr/0003-polyglot-persistence.md) (revised) starts
+`domain-notification`'s read-model tables on Postgres, behind the same
+`NotificationRepository`/`DedupeRepository`/`ScheduledNotificationRepository`
+ports a Cassandra/ScyllaDB adapter would implement later. This corrects an
+earlier capacity estimate: 1M users at "50-80M notifications/day" implies
+26-80 sends per user per day, where realistic consumer platforms run 1-5;
+the honest figure is closer to 1-5M/day — **roughly 12-60/sec average**,
+not the ~600-900/sec the original figure implies. At the honest number, a
+single Postgres instance handles the write-heavy tables without strain,
+and everything in this system is easier to build and debug against one
+transactional store first. Cassandra isn't wrong as an eventual
+destination for this context's hot path — see
+[ADR 0003](../adr/0003-polyglot-persistence.md) — it's wrong to pay its
+operational and eventual-consistency cost before the load that justifies
+it exists.
+
+| Data | Phase 1 | Move when | Moves to |
+|---|---|---|---|
+| Tenants, API keys, preferences, templates | Postgres | never | Stays — provisioning-rate writes, Redis-cached reads |
+| `ScheduledNotification` | Postgres | never | Stays — needs range queries on `due_at`, which a log can't answer |
+| `DedupeClaim` | Postgres unique constraint | > ~2K claims/sec | Partitioned KV (Scylla / DynamoDB-style conditional write) |
+| `NotificationRequest`, `DeliveryAttempt` | Postgres | > ~5K writes/sec sustained | Cassandra/ScyllaDB — exactly what [ADR 0003](../adr/0003-polyglot-persistence.md) already describes, just later |
+| `NotificationFeedItem` | Postgres, partial index on unread | > ~50M live rows | Cassandra, partitioned by `recipientId`, clustered `created_at desc` |
+
+Every move above is a connection-string change behind an existing port, not
+an application rewrite — see [ADR 0005](../adr/0005-ddd-hexagonal-architecture.md).
+
 ## What's an explicit, known trade-off — not solved here
 
 - **Redis hot-key risk** for a single extreme-volume tenant's rate-limit
@@ -91,6 +120,26 @@ real requirement). See [`messaging.md`](messaging.md) for the topic layout.
 - **Real external provider throughput ceilings** (Twilio, FCM) are far
   below any number in this document and are unrelated to this system's
   architecture — a partnerships/multi-account problem, not a software one.
+- **Cross-tenant provider fairness** — per-`(tenantId, channel)` rate
+  limits (see [`multi-tenancy.md`](multi-tenancy.md#rate-limiting)) cap a
+  tenant against *itself*. They don't stop one tenant's broadcast from
+  consuming the shared Twilio/FCM quota every other tenant also draws
+  from. A real fix needs a global provider-side budget with weighted
+  per-tenant admission, in the router, ahead of the gateway call — not
+  built now: this system has no tenant profile today where one tenant's
+  volume would meaningfully starve another's, and building weighted
+  admission speculatively is exactly the gold-plating this document's own
+  standard argues against elsewhere. Flagged explicitly, not silently
+  assumed away, precisely because it's the kind of gap that's cheap to
+  postpone until the first incident makes it urgent, and expensive to
+  retrofit after.
+- **Every figure in this document is illustrative, not measured** —
+  arithmetic against a growth curve, not output from a load test. The
+  Phase 1 roadmap's load-test step (see [`../roadmap.md`](../roadmap.md))
+  exists specifically to replace every number here, and the thresholds in
+  "Storage phasing" above, with what's actually observed. Until then,
+  treat every `/sec` figure in this repo as "enough to size headroom
+  against," not "measured."
 
 ## Relationship to other docs
 
