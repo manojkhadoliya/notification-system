@@ -3,9 +3,17 @@
 Base path: `/v1`. Auth: `Authorization: Bearer <api-key>` (tenant-scoped,
 validated against `ApiKey` in the Identity & Tenancy context).
 
+This is Door 1 of the two-door ingress described in
+[`messaging.md`](messaging.md#two-doors-onto-one-backbone) — the
+tenant-facing HTTP API. Internal services have a second door (a producer
+library, no HTTP hop) for domain facts; both normalize onto the same event
+shape before anything downstream sees them.
+
 ## `POST /v1/notifications`
 
-Accept a notification request for async dispatch.
+Accept a notification **intent** for async dispatch — the caller states who
+and why, not necessarily which channel; that's the router's decision (see
+[`messaging.md`](messaging.md#router)), unless overridden explicitly.
 
 **Headers**
 - `Authorization: Bearer <api-key>` (required)
@@ -16,13 +24,21 @@ Accept a notification request for async dispatch.
 ```json
 {
   "recipientId": "uuid",
-  "channel": "sms | push | email | in_app",
+  "notificationType": "string",
+  "channel": "sms | push | email | in_app (optional override)",
   "templateVersionId": "uuid (optional)",
   "payload": {
     "message": "string"
   }
 }
 ```
+`recipientId` is a single recipient — this door doesn't accept an audience
+descriptor. Broadcast to many recipients goes through Door 2 only; see
+[`messaging.md`](messaging.md#broadcast-is-door-2-only). `notificationType`
+is required — it's what the router checks preferences against when
+`channel` is omitted. If `channel` is present, it's honored as a
+*requested* channel, still checked against that recipient's opt-out for
+that channel/notification-type — not a bypass of the preference check.
 `payload` is either raw content (as above) or the variables a
 `templateVersionId` renders against — one or the other, not both. See
 [`domain-model.md`](domain-model.md#templates) for the Templates context.
@@ -34,11 +50,11 @@ Accept a notification request for async dispatch.
   "status": "accepted"
 }
 ```
-`202` means the request was durably produced to Kafka (after
+`202` means the request was durably produced to the event backbone (after
 application-level dedup on `tenantId` + `idempotencyKey`), not that it's
-been written to a queryable store yet — see the note on
+been delivered, or even routed to a channel yet — see the note on
 `GET /v1/notifications/:id` below and
-[ADR 0008](../adr/0008-notification-delivery-cqrs.md).
+[ADR 0009](../adr/0009-event-backbone-router.md).
 
 **Response — 409 Conflict** — idempotency key already used for a different
 payload within the dedup window.
@@ -48,12 +64,14 @@ payload within the dedup window.
 ## `GET /v1/notifications/:id`
 
 Fetch current status and delivery-attempt history for a request, read from
-the Cassandra-backed projection populated by
-`services/projection-notification`. **Eventually consistent** with the
-Kafka log, not transactional: a `GET` issued immediately after a `202` may
-return `404` for a brief window until the projection consumer catches up.
-Clients that need to confirm acceptance synchronously should treat `202`
-itself as that confirmation, not a subsequent `GET`.
+the read-model projection populated by `services/projection-notification`
+(see [`messaging.md`](messaging.md#delivery-status-has-one-writer)).
+**Eventually consistent**, not transactional: a `GET` issued immediately
+after a `202` may return `404` for a brief window until the projection
+consumer catches up. This has never been anything the delivery path itself
+waits on — only this read endpoint does. Clients that need to confirm
+acceptance synchronously should treat `202` itself as that confirmation,
+not a subsequent `GET`.
 
 **Response — 200 OK**
 ```json

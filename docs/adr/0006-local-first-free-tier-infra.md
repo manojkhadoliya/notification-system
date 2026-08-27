@@ -10,21 +10,25 @@ appropriate to a system that might later need to scale.
 
 ## Decision
 The full local-only build (see [ADR 0004](0004-channel-rollout.md)) runs
-entirely on local Docker Compose: PostgreSQL, Cassandra, Kafka, and Redis,
-plus every `services/*` process. A hosted free-tier demo on wire-compatible
-managed services, and a paid, scaled AWS deployment, are both documented as
-future work but deliberately left unphased and uncommitted — channel
-breadth and deployment target are separate decisions, and only the former
-is committed to now. Full detail:
+entirely on local Docker Compose: PostgreSQL, Kafka, and Redis, plus every
+`services/*` process. **No Cassandra container in Phase 1** — per
+[ADR 0003](0003-polyglot-persistence.md) (revised), notification-delivery's
+read model runs on Postgres until a measured threshold is crossed; see
+[`scaling-strategy.md`](../architecture/scaling-strategy.md#storage-phasing).
+A hosted free-tier demo on wire-compatible managed services, and a paid,
+scaled AWS deployment, are both documented as future work but deliberately
+left unphased and uncommitted — channel breadth and deployment target are
+separate decisions, and only the former is committed to now. Full detail:
 [`infra-strategy.md`](../architecture/infra-strategy.md).
 
 ## Rationale
 Every piece of infrastructure is used via its vanilla open protocol
-(Postgres wire protocol, the Kafka protocol, the Cassandra protocol, the
-Redis protocol) rather than a proprietary managed API — combined with the
-ports-and-adapters structure from [ADR 0005](0005-ddd-hexagonal-architecture.md),
-this means the eventual move to hosted infrastructure is a configuration
-and hosting change, not an application rewrite.
+(Postgres wire protocol, the Kafka protocol, the Redis protocol — and,
+later, the Cassandra protocol once that store is adopted) rather than a
+proprietary managed API — combined with the ports-and-adapters structure
+from [ADR 0005](0005-ddd-hexagonal-architecture.md), this means both the
+eventual move to hosted infrastructure and the eventual Cassandra adoption
+are configuration/adapter changes, not an application rewrite.
 
 ## Consequences
 - A single-node/single-broker local setup proves the pipeline is *correct*

@@ -5,10 +5,11 @@
 Every entity in every bounded context is scoped by `tenantId` (owned by the
 Identity & Tenancy context, referenced by id from the others — see
 [`domain-model.md`](domain-model.md)). A single shared Postgres database
-(identity, preferences, templates) and a single Kafka cluster + Cassandra
-cluster (notification delivery) serve all tenants — pooled/shared
-infrastructure, not one stack per tenant. This is deliberate, not just a
-Phase 1 simplification: the pooled model is what lets user-count growth
+(identity, preferences, templates, and — Phase 1 — notification delivery's
+read model too) and a single Kafka cluster serve all tenants — pooled/
+shared infrastructure, not one stack per tenant. This is deliberate, not
+just a Phase 1 simplification: the pooled model is what lets user-count
+growth
 (illustratively, ~100 users to ~1,000,000 over 3-4 years — see
 [`scaling-strategy.md`](scaling-strategy.md)) be absorbed by adding capacity
 to the shared infrastructure rather than provisioning new infrastructure
@@ -61,6 +62,20 @@ throughput regardless of total partition count.
   [`scaling-strategy.md`](scaling-strategy.md)); flagged there as an
   identified, not-yet-built mitigation (sharded sub-buckets) rather than
   silently assumed away.
+- **Known gap, not this mechanism's job:** per-tenant limits cap a tenant
+  against itself, not against the shared provider quota (Twilio/FCM) every
+  other tenant also draws from. See
+  [`scaling-strategy.md`](scaling-strategy.md#whats-an-explicit-known-trade-off--not-solved-here)
+  for why this is deliberately deferred rather than built here.
+
+## Data erasure
+
+Recipient personal data lives in two places: Postgres/the read-model
+projection (straightforward to delete a row), and the long-retention Kafka
+event log (not straightforward — see
+[`data-privacy.md`](data-privacy.md#the-problem)). Erasure against the log
+is handled by per-recipient crypto-shredding — designed now, build
+deferred; see [`data-privacy.md`](data-privacy.md) for the full mechanism.
 
 ## Why this matters for the portfolio goal
 

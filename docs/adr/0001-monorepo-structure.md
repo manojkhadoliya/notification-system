@@ -34,31 +34,46 @@ know a framework-specific convention.
 notification-system/
   services/                    composition roots — DI wiring + entrypoint only,
                                 no business logic
-    api/                       Fastify HTTP API (ADR 0007)
-    worker-sms/                 consumes the sms.notify topic
-    worker-push/                 consumes the push.notify topic
-    worker-email/                  consumes the email.notify topic
-    worker-inapp/                  WebSocket gateway + feed consumer (in_app.notify)
-    projection-notification/       consumes sms.notify/push.notify/email.notify,
-                                    projects into the Cassandra read model (ADR 0008)
+    api/                       Fastify HTTP API — Door 1 (ADR 0007, ADR 0009)
+    router/                     single decision point: preferences, quiet
+                                 hours, channel, template render (ADR 0009)
+    scheduler/                  polls scheduled_notifications, re-emits due
+                                 rows (ADR 0011)
+    fanout-expander/            broadcast audience descriptor -> chunks ->
+                                 per-recipient events (ADR 0011)
+    worker-sms/                 consumes command.sms + retry tiers
+    worker-push/                 consumes command.push + retry tiers
+    worker-email/                  consumes command.email + retry tiers
+    worker-inapp/                  consumes command.in_app + retry tiers,
+                                    writes the feed row (ADR 0012)
+    inapp-gateway/                  stateless WebSocket registry, no Kafka
+                                     consumer group (ADR 0012)
+    projection-notification/       single writer of NotificationRequest.status,
+                                    consumes events.* + delivery-status (ADR 0008, 0010)
   packages/
-    domain-notification/       core domain: NotificationRequest/DeliveryAttempt,
-                                dispatch orchestration, ports (ADR 0005)
-    domain-preferences/         Recipient/Preference domain + PreferenceRepository port
+    domain-notification/       core domain: NotificationRequest/DeliveryAttempt/
+                                DedupeClaim/ScheduledNotification, dispatch
+                                orchestration, ports (ADR 0005)
+    domain-preferences/         Recipient/Preference/RecipientKey domain +
+                                 PreferenceRepository/RecipientKeyRepository ports
     domain-identity/             Tenant/ApiKey domain + RateLimitPolicy
     domain-templates/             Template/TemplateVersion domain + TemplateRepository port
     shared-kernel/                 minimal cross-context value objects only
     infra-postgres/             Prisma schema + repository port adapters for
-                                 domain-identity/domain-preferences/domain-templates (ADR 0003)
-    infra-cassandra/              NotificationRepository adapter for
-                                    domain-notification (ADR 0003, ADR 0008)
-    infra-kafka/                   MessageBroker port adapter (ADR 0002)
-    infra-redis/                   RateLimiter / IdempotencyStore port adapters
+                                 domain-identity/domain-preferences/domain-templates,
+                                 and — Phase 1 — domain-notification's read
+                                 model too (ADR 0003, revised)
+    infra-cassandra/              reserved NotificationRepository/DedupeRepository
+                                    adapter for domain-notification, built at a
+                                    measured threshold (ADR 0003, ADR 0008)
+    infra-kafka/                   MessageBroker port adapter (ADR 0002, ADR 0009)
+    infra-redis/                   RateLimiter / IdempotencyStore / pub-sub port adapters
     providers-sms/                 Twilio + mock SmsGateway adapters
     providers-push/                 FCM + mock PushGateway adapters
     providers-email/                 SES/SendGrid + mock EmailGateway adapters
   infra/
-    docker-compose.yml           postgres, cassandra, redis, kafka, services/* containers
+    docker-compose.yml           postgres, redis, kafka, services/* containers
+                                  (no cassandra until a threshold is crossed)
   docs/
     architecture/                 system design docs
     adr/                          decision records (this file included)

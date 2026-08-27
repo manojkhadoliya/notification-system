@@ -14,20 +14,44 @@ exists, so it gets the most design attention (retry policy, circuit
 breaking, DLQ).
 
 **Ubiquitous language:**
-- **NotificationRequest** — a tenant's request to notify a recipient
-  through one or more channels; identified by a tenant-scoped idempotency
-  key.
+- **NotificationRequest** — a tenant's request to notify one recipient;
+  identified by a tenant-scoped idempotency key. Carries a
+  `notificationType`, an optional channel override, and (if it originated
+  from a fan-out expansion) a `broadcastId` back-reference.
 - **DeliveryAttempt** — one try at delivering a request through one
   channel; has a status (`queued`, `sent`, `failed`, `delivered`) and
   provider response metadata.
 - **Channel** — `sms | push | email | in_app`.
 - **RetryPolicy** — backoff schedule and max-attempts rule applied before a
   `DeliveryAttempt` is routed to the dead-letter queue.
+- **RoutingDecision** — the router's output for one event: resolved
+  channel, quiet-hours verdict, and rendered content. Produced once, by
+  `services/router`, never recomputed by a worker — see
+  [`messaging.md`](messaging.md#router).
+- **DedupeClaim** — a conditional claim on `(tenantId,
+  notificationRequestId, recipientId, channel)`, taken by a worker
+  immediately before the provider call, so an at-least-once redelivery
+  never repeats a send. See
+  [ADR 0010](../adr/0010-delivery-reliability.md) — this is a correctness
+  invariant, not a tunable.
+- **ScheduledNotification** — a deferred `NotificationRequest`, held for a
+  quiet-hours window or a future send, keyed by `due_at`. See
+  [ADR 0011](../adr/0011-scheduling-and-fanout.md).
+- **BroadcastRequest** / **Chunk** — a broadcast's audience descriptor, and
+  the work-sized groups `services/fanout-expander` splits it into before
+  expanding to individual `NotificationRequest`s. Door 2 only — see
+  [`messaging.md`](messaging.md#broadcast-is-door-2-only).
 
 **Ports it defines** (implemented by infrastructure packages):
-- `NotificationRepository` — persist/query requests and attempts.
-- `MessageBroker` — publish a request for async dispatch; workers consume
-  through this port too.
+- `NotificationRepository` — persist/query requests and attempts (read
+  model only as of [ADR 0009](../adr/0009-event-backbone-router.md) —
+  nothing on the delivery path reads through it).
+- `MessageBroker` — publish an event/command for async dispatch; the
+  router and workers consume through this port too.
+- `DedupeRepository` — claim a `DedupeClaim` before a provider call.
+- `ScheduledNotificationRepository` — write/claim `ScheduledNotification`
+  rows (`due_at` range queries — see
+  [`data-model.md`](data-model.md#scheduled_notifications)).
 - `SmsGateway` / `PushGateway` / `EmailGateway` / `InAppGateway` — send
   through a concrete channel provider (per
   [ADR 0004](../adr/0004-channel-rollout.md), all four are built
@@ -40,15 +64,26 @@ Owns who can be contacted, how, and when.
 - **Recipient** — a tenant's end user, with channel addresses (phone
   number, push token).
 - **Preference** — per recipient/channel/notification-type opt-in or
-  opt-out.
+  opt-out. **Deferred extension point:** channel fallback ("SMS bounced,
+  try push") is scoped as a per-`notificationType` ordered channel list on
+  `Preference`, resolved by the router — decided as a design shape, not yet
+  built; see [`../roadmap.md`](../roadmap.md#future-work).
 - **QuietHours** — a time window during which non-urgent notifications are
-  suppressed.
+  suppressed. Enforced by the router, which defers into
+  `ScheduledNotification` rather than dropping — see
+  [`messaging.md`](messaging.md#router).
 - **Consent** — the record that a recipient agreed to receive a channel of
   notification (compliance-relevant).
+- **RecipientKey** — a per-recipient encryption key used to protect
+  personal-data fields on the long-retention event log; destroying it is
+  how an erasure request is honored without editing the log itself. See
+  [`data-privacy.md`](data-privacy.md) — designed now, build deferred.
 
 **Ports it defines:**
 - `PreferenceRepository` — read/write recipient preferences and quiet
   hours.
+- `RecipientKeyRepository` — get/create/destroy a recipient's encryption
+  key. See [`data-privacy.md`](data-privacy.md).
 
 ### Identity & Tenancy
 Owns tenant isolation and access control.
@@ -91,6 +126,13 @@ Contexts reference each other **by id only** — never by foreign-key join or
 shared table. `Notification Delivery` asks `Recipient Preferences`
 (through its port) whether a send is allowed before dispatching; it does
 not read the preferences table directly.
+
+`services/router` is a `Notification Delivery` composition root, not a
+fifth context — it makes exactly the decisions this context map already
+assigns to `Notification Delivery` (which channel, whether to defer) and
+`Recipient Preferences` (opt-out, quiet hours), just centralized in one
+process instead of repeated inside every worker. See
+[`messaging.md`](messaging.md#router).
 
 ## Rule: dependency direction
 

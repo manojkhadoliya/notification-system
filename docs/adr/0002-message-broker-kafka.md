@@ -15,14 +15,24 @@ BullMQ).
 
 ## Decision
 Kafka, accessed only through a `MessageBroker` port owned by
-`domain-notification` and implemented by `infra-kafka`. Per-channel topics
-(`sms.notify`, `push.notify`, `email.notify`, `in_app.notify`), partitioned
+`domain-notification` and implemented by `infra-kafka`. Topics partitioned
 by `recipientId`, with one retry topic per backoff tier and a DLQ topic per
 channel (see [`messaging.md`](../architecture/messaging.md) for the full
-topology). Kafka is also the durable log of record for accepted requests —
-the API produces directly to it after an application-level idempotency
-check; there is no separate database write in the ingest path (see
-[ADR 0008](0008-notification-delivery-cqrs.md)).
+topology). Kafka is also the durable log of record for accepted
+intents/facts — both ingress doors produce directly to it after an
+application-level idempotency check; there is no separate database write
+in the ingest path (see [ADR 0008](0008-notification-delivery-cqrs.md)).
+
+**Topic layout, updated by [ADR 0009](0009-event-backbone-router.md):**
+this ADR's original decision used one topic per channel
+(`sms.notify`/`push.notify`/`email.notify`/`in_app.notify`) as both the
+ingress and dispatch point, with each worker deciding independently
+whether to act on a message. That's superseded by a two-layer topology —
+`events.{critical|standard|bulk}` upstream of a router, `command.{channel}`
+downstream, produced only by the router — for the reasons in
+[ADR 0009](0009-event-backbone-router.md). The partitioning and
+retry/DLQ-per-channel decisions below are unchanged; only the topic names
+and which component produces to which topic changed.
 
 ## Rationale
 - **Partitioned log scales by adding capacity.** A topic's throughput
@@ -39,11 +49,13 @@ check; there is no separate database write in the ingest path (see
   automatically, since that tenant's own recipients already hash to
   different keys.
 - **Retry/DLQ via a retry-topic-per-backoff-tier pattern.** A failed
-  message is produced to `<channel>.notify.retry-30s`, then `retry-5m`, and
-  so on, landing on `<channel>.notify.dlq` after `RetryPolicy.maxAttempts`.
-  This is more topics than a broker with native per-message TTL/DLX would
-  need, but it's a well-established pattern, and it keeps the durability
-  and scale-out properties Kafka's partitioned log provides.
+  message is produced to `command.{channel}.retry-30s`, then `retry-5m`,
+  then `retry-30m`, landing on `command.{channel}.dlq` after
+  `RetryPolicy.maxAttempts`. This is more topics than a broker with native
+  per-message TTL/DLX would need, but it's a well-established pattern, and
+  it keeps the durability and scale-out properties Kafka's partitioned log
+  provides. See [ADR 0010](0010-delivery-reliability.md) for who consumes
+  these tiers (one process per channel, covering all its tiers).
 
 ## Alternatives considered
 - **RabbitMQ**: gives per-message retry/DLQ semantics natively via
