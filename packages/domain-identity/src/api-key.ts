@@ -40,6 +40,10 @@ export class ApiKey {
     return this.props.hashedKey;
   }
 
+  get createdAt(): Date {
+    return this.props.createdAt;
+  }
+
   get revokedAt(): Date | null {
     return this.props.revokedAt;
   }
