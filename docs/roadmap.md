@@ -100,9 +100,19 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       `NotificationRepository` had no way to persist `DeliveryAttempt` rows
       (added `findAttempts`/`saveAttempt`), and `ApiKey` never exposed a
       `createdAt` getter
-- [ ] `infra-kafka`: `MessageBroker` adapter, event/command/retry-topic
-      topology ([ADR 0002](adr/0002-message-broker-kafka.md),
-      [ADR 0009](adr/0009-event-backbone-router.md))
+- [x] `infra-kafka`: `MessageBroker` adapter (`KafkaMessageBroker`,
+      kafkajs, idempotent producer), event/command/retry-topic topology
+      centralized in `topics.ts` ([ADR 0002](adr/0002-message-broker-kafka.md),
+      [ADR 0009](adr/0009-event-backbone-router.md)). Also a generic
+      `KafkaConsumer` wrapper for future composition roots to consume
+      through. Topic-naming unit tests pass (5); **not yet run against a
+      live broker** — see
+      [`infra-kafka/README.md`](../packages/infra-kafka/README.md#local-setup)
+      for `smoke-test.mjs`, which round-trips a message through every
+      topic including the `x-retry-after` header. The retry ladder's
+      "hold until the tier elapses" behavior is deliberately **not**
+      here — that's timing logic for each channel worker to build using
+      this package, not a generic consumer wrapper's job
 - [ ] `infra-redis`: `RateLimiter` + `IdempotencyStore` adapters, plus a
       pub/sub adapter for `worker-inapp` ↔ `inapp-gateway` (see
       [ADR 0012](adr/0012-inapp-gateway-split.md))

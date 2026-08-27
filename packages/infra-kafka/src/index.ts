@@ -1,5 +1,18 @@
-// Phase 0 scaffold — see docs/roadmap.md. Entities, ports, and adapter logic for this package land in Phase 1;
-// this file exists so the workspace, the TypeScript project-reference
-// graph, and the lint/typecheck/boundary-check pipeline all have something
-// real to build against.
-export {};
+export { createKafka, createKafkaProducer } from "./client.js";
+export type { KafkaConnectionConfig } from "./client.js";
+
+export { KafkaMessageBroker } from "./kafka-message-broker.js";
+
+export { KafkaConsumer } from "./consumer.js";
+export type { KafkaConsumerConfig, ConsumedMessage } from "./consumer.js";
+
+export {
+  eventTopic,
+  commandTopic,
+  dlqTopic,
+  retryTopic,
+  allRetryTopics,
+  EVENTS_BROADCAST_TOPIC,
+  EVENTS_BROADCAST_CHUNKS_TOPIC,
+  DELIVERY_STATUS_TOPIC,
+} from "./topics.js";
