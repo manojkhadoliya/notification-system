@@ -9,6 +9,6 @@ allowBuilds:
   # Prisma's postinstall downloads the query-engine binary for the local
   # platform and generates the initial client — standard, required for
   # Prisma to work at all; safe to allow.
-  '@prisma/client': true
-  '@prisma/engines': true
+  "@prisma/client": true
+  "@prisma/engines": true
   prisma: true
