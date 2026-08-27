@@ -6,3 +6,9 @@ allowBuilds:
   # standard for gRPC/protobuf-based packages (pulled in transitively by
   # the OTel exporters in packages/observability); safe to allow.
   protobufjs: true
+  # Prisma's postinstall downloads the query-engine binary for the local
+  # platform and generates the initial client — standard, required for
+  # Prisma to work at all; safe to allow.
+  '@prisma/client': true
+  '@prisma/engines': true
+  prisma: true

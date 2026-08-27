@@ -1,12 +1,16 @@
 # packages/infra-postgres
 
-Implements the repository ports defined by `domain-identity`,
-`domain-preferences` (including, once built, `RecipientKeyRepository` —
-see [`data-privacy.md`](../../docs/architecture/data-privacy.md)), and
-`domain-templates` (`TenantRepository`, `ApiKeyRepository`,
-`PreferenceRepository`, `TemplateRepository`) using Prisma against
-PostgreSQL. Owns the Prisma schema, modeled per bounded context (see
-[`../../docs/architecture/data-model.md`](../../docs/architecture/data-model.md)).
+Implements the repository ports defined by `domain-identity`
+(`TenantRepository`, `ApiKeyRepository`), `domain-preferences`
+(`PreferenceRepository` — `RecipientKeyRepository` still deferred, see
+[`data-privacy.md`](../../docs/architecture/data-privacy.md)), and
+`domain-templates` (`TemplateRepository`) using Prisma against PostgreSQL.
+Owns the Prisma schema (`prisma/schema.prisma`), modeled per bounded
+context (see
+[`../../docs/architecture/data-model.md`](../../docs/architecture/data-model.md))
+— one section of the schema file per context, in the same order as that
+doc, with a `@map`/`@@map` on every field/table so the actual Postgres
+column/table names match it exactly.
 
 **Also implements `domain-notification`'s `NotificationRepository`,
 `DedupeRepository`, and `ScheduledNotificationRepository` for Phase 1** —
@@ -20,9 +24,53 @@ crossed (see
 at which point `infra-cassandra` takes over those first two ports behind
 the same interfaces.
 
-Depends on the `domain-identity`/`domain-preferences`/`domain-templates`/
-`domain-notification` packages (to implement their port interfaces); never
-the reverse.
+Two adapters worth knowing about before touching them:
+- **`PostgresDedupeRepository.tryClaim`** relies on the `DedupeClaim`
+  table's composite primary key to make a conflicting claim fail — it's a
+  plain `create()` that turns a unique-constraint violation into `false`,
+  not a check-then-insert (which would race). See ADR 0010.
+- **`PostgresScheduledNotificationRepository.claimDue`** is raw SQL
+  (`$queryRaw`, parameterized via `Prisma.sql`) inside a transaction —
+  `SELECT ... FOR UPDATE SKIP LOCKED` has no equivalent in Prisma's query
+  builder. See ADR 0011#poller-sharding.
+
+`NotificationFeedItem` (the `in_app`-only feed projection) is **not**
+modeled here yet — no `domain-notification` port exists for it either
+(see `schema.prisma`'s comment on why); add both together when
+`services/worker-inapp` is built.
+
+Depends on the `shared-kernel`/`domain-identity`/`domain-preferences`/
+`domain-templates`/`domain-notification` packages (to implement their port
+interfaces); never the reverse.
+
+## Local setup
+
+```
+pnpm compose:up                                                   # starts postgres (+ redis, kafka, jaeger)
+pnpm --filter @notification-system/infra-postgres prisma:migrate  # creates the schema
+pnpm --filter @notification-system/infra-postgres build           # compiles the adapters
+pnpm --filter @notification-system/infra-postgres smoke-test      # round-trips a row through every adapter
+```
+
+`pnpm install` runs `prisma generate` automatically (a `postinstall`
+script on this package) so the generated client's types exist for
+`pnpm build` even on a fresh clone, before a database is ever reachable —
+`prisma generate` only reads `schema.prisma`, it doesn't connect.
+`prisma:validate`/`prisma:migrate` do need `DATABASE_URL` (see
+`.env.example`) and, for `migrate`, an actual reachable Postgres.
+
+**Not yet verified against a live database** — the repository adapters
+above were built and typechecked without Docker available in that
+session; `prisma validate`/`prisma generate` both passed (schema
+correctness), but no adapter has actually round-tripped a row through a
+real Postgres yet. [`scripts/smoke-test.mjs`](scripts/smoke-test.mjs)
+exists specifically to close that gap — it exercises all seven
+repositories against a real database (create, read back, assert), including
+the two adapters most likely to have a real bug: `DedupeRepository`'s
+unique-constraint-violation handling and
+`ScheduledNotificationRepository`'s raw `FOR UPDATE SKIP LOCKED` query.
+Run it (see "Local setup" below) before trusting this package beyond
+"it typechecks."
 
 **Delivered in:** Phase 1. Rationale for Postgres in
 [ADR 0003](../../docs/adr/0003-polyglot-persistence.md); local-vs-hosted plan

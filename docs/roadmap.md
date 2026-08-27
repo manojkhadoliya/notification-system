@@ -85,11 +85,21 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
 - [x] `domain-templates`: `Template`/`TemplateVersion`/`Locale` entities,
       `TemplateRepository` port. Rendering itself (Handlebars) is
       deliberately not here — see the Handlebars line further down
-- [ ] `infra-postgres`: Prisma schema + repository adapters for
+- [x] `infra-postgres`: Prisma schema + repository adapters for
       `domain-identity`, `domain-preferences`, `domain-templates`, and —
       for Phase 1 — `domain-notification`'s `NotificationRepository` /
       `DedupeRepository` / `ScheduledNotificationRepository` (see
-      [ADR 0003](adr/0003-polyglot-persistence.md), revised)
+      [ADR 0003](adr/0003-polyglot-persistence.md), revised). Schema
+      validated (`prisma validate`/`prisma generate`, no live DB needed for
+      either); adapters build and typecheck against the generated client.
+      **Not yet run against a live Postgres** — no Docker in the session
+      this was built in; see
+      [`infra-postgres/README.md`](../packages/infra-postgres/README.md#local-setup)
+      for the steps to verify it for real. Building this adapter surfaced
+      two real gaps in the Phase 1 domain-layer PR, both fixed here:
+      `NotificationRepository` had no way to persist `DeliveryAttempt` rows
+      (added `findAttempts`/`saveAttempt`), and `ApiKey` never exposed a
+      `createdAt` getter
 - [ ] `infra-kafka`: `MessageBroker` adapter, event/command/retry-topic
       topology ([ADR 0002](adr/0002-message-broker-kafka.md),
       [ADR 0009](adr/0009-event-backbone-router.md))

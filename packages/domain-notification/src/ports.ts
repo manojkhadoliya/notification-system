@@ -10,6 +10,7 @@ import type {
 } from "@notification-system/shared-kernel";
 import type { ChannelCommand } from "./channel-command.js";
 import type { DedupeClaim } from "./dedupe-claim.js";
+import type { DeliveryAttempt } from "./delivery-attempt.js";
 import type { NotificationRequest } from "./notification-request.js";
 import type { ScheduledNotification } from "./scheduled-notification.js";
 
@@ -70,6 +71,14 @@ export interface MessageBroker {
 export interface NotificationRepository {
   findById(id: NotificationRequestId): Promise<NotificationRequest | null>;
   save(request: NotificationRequest): Promise<void>;
+  /** `GET /v1/notifications/:id` reads both `NotificationRequest` and its
+   * `DeliveryAttempt` history together (see
+   * data-model.md#notification-delivery-core-domain) — added here rather
+   * than a separate port because both are the same read-model projection,
+   * written by the same single writer (`services/projection-notification`
+   * for the request; each channel worker for its own attempts). */
+  findAttempts(id: NotificationRequestId): Promise<DeliveryAttempt[]>;
+  saveAttempt(attempt: DeliveryAttempt): Promise<void>;
 }
 
 /** Claim a `DedupeClaim` before a provider call — see ADR 0010. */

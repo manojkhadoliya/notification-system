@@ -62,6 +62,12 @@ module.exports = {
     doNotFollow: {
       path: "node_modules",
     },
+    // packages/infra-postgres/generated/ is the Prisma client's generated
+    // output (see its schema.prisma generator block) — vendored code, not
+    // ours to lint boundaries on.
+    exclude: {
+      path: "(^|/)generated/",
+    },
     includeOnly: "^(packages|services)",
     // Deliberately no `tsConfig` option: the root tsconfig.json is a
     // references-only "solution" file (`files: []`), and pointing
