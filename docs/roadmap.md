@@ -8,23 +8,54 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
 "Future work" at the bottom.
 
 ## Phase 0 — Scaffolding
-- [ ] Monorepo setup (pnpm workspaces, TypeScript project references)
-- [ ] ESLint / Prettier config
-- [ ] Package boundary rule (lint rule or dependency-cruiser) forbidding
-      `domain-*` from importing `infra-*` / `providers-*`
-- [ ] `docker-compose.yml` skeleton: postgres, redis, kafka only —
+- [x] Monorepo setup (pnpm workspaces, TypeScript project references) —
+      every `packages/*`/`services/*` member has a `package.json` +
+      `tsconfig.json` wired per its declared dependencies (see each
+      package's README's "Depends on"); `pnpm build` (`tsc -b`) succeeds
+      across the whole graph
+- [x] ESLint / Prettier config (`eslint.config.mjs`, `.prettierrc.json`) —
+      `pnpm lint` / `pnpm format` both pass
+- [x] Package boundary rule (`dependency-cruiser`, not just a lint rule —
+      see [`.dependency-cruiser.cjs`](../.dependency-cruiser.cjs))
+      forbidding `domain-*` from importing `infra-*` / `providers-*` /
+      `observability`. Verified with a deliberate throwaway violation
+      (`domain-notification` importing `infra-kafka`) — `pnpm boundaries`
+      correctly failed with `error domain-must-not-import-adapters`
+      before the violation was reverted
+- [x] `docker-compose.yml` skeleton: postgres, redis, kafka only —
       Cassandra deferred, see
       [`architecture/scaling-strategy.md`](architecture/scaling-strategy.md#storage-phasing)
-      and [ADR 0003](adr/0003-polyglot-persistence.md)
-- [ ] Kafka topic creation matching the actual topology: `events.critical`
+      and [ADR 0003](adr/0003-polyglot-persistence.md). Also adds `jaeger`
+      (OTLP trace backend for `packages/observability`, added this pass
+      rather than deferred — see
+      [`architecture/infra-strategy.md`](architecture/infra-strategy.md)).
+      **Not yet run** — no Docker available in the sandbox this was
+      authored in; needs a `pnpm compose:up` smoke test on a real machine
+- [x] Kafka topic creation matching the actual topology: `events.critical`
       / `.standard` / `.bulk`, `events.broadcast`,
       `events.broadcast.chunks`, `command.{sms|push|email|in_app}` +
       their `.retry-30s`/`.retry-5m`/`.retry-30m`/`.dlq`, `delivery-status`
       — see [`architecture/messaging.md`](architecture/messaging.md#topic-layout)
+      and [`../infra/kafka/create-topics.sh`](../infra/kafka/create-topics.sh).
+      **Not yet run**, same caveat as above
 - [ ] Internal producer library (Door 2) — same normalized event shape as
       Door 1's intent, no HTTP hop — see
-      [`architecture/messaging.md`](architecture/messaging.md#two-doors-onto-one-backbone)
-- [ ] CI skeleton: lint + typecheck on push
+      [`architecture/messaging.md`](architecture/messaging.md#two-doors-onto-one-backbone).
+      Deliberately **not** scaffolded as its own package: it's a thin
+      wrapper around `domain-notification`'s `MessageBroker` port and the
+      normalized-event-shape type, both Phase 1 deliverables (see
+      `packages/shared-kernel`'s and `packages/domain-notification`'s
+      READMEs) — there's nothing for it to wrap yet
+- [x] `packages/observability` — shared OpenTelemetry bootstrap
+      (`startTracing`), exporting traces via OTLP/HTTP to the `jaeger`
+      compose container. Brought forward from the Phase 1
+      reliability-polish item below because it's pure infra bootstrap with
+      no domain model to wait on; real working code, not a Phase 1 stub —
+      see [`packages/observability/README.md`](../packages/observability/README.md)
+- [x] CI skeleton: lint + typecheck on push (`.github/workflows/ci.yml`) —
+      runs `pnpm format` / `pnpm lint` / `pnpm typecheck` / `pnpm
+      boundaries`, all four verified locally before being wired into the
+      workflow
 
 ## Phase 1 — Full local build, all channels
 - [ ] `domain-notification`: entities, value objects, ports
@@ -98,7 +129,11 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
         a raw re-send (see `messaging.md`)
   - [ ] Prometheus metrics + Grafana dashboard in compose
   - [ ] OpenTelemetry tracing across API/producer library → event backbone
-        → router → command topic → worker/projection consumer
+        → router → command topic → worker/projection consumer. The
+        bootstrap itself (`packages/observability`'s `startTracing`) is
+        already built (Phase 0, above) — what's left here is calling it
+        from every composition root's entrypoint and confirming a trace
+        actually spans the Kafka hop end to end in Jaeger
   - [ ] Load test script (k6 or autocannon) — demonstrates the elastic
         peak-scale-out mechanism from [ADR 0002](adr/0002-message-broker-kafka.md)
         (partition count + consumer-group autoscaling), not a raw

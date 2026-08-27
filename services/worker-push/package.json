@@ -1,0 +1,21 @@
+{
+  "name": "@notification-system/worker-push",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@notification-system/domain-notification": "workspace:*",
+    "@notification-system/infra-postgres": "workspace:*",
+    "@notification-system/infra-kafka": "workspace:*",
+    "@notification-system/infra-redis": "workspace:*",
+    "@notification-system/providers-push": "workspace:*",
+    "@notification-system/observability": "workspace:*"
+  }
+}

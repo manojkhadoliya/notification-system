@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"],
+  "references": [
+    {
+      "path": "../../packages/domain-notification"
+    },
+    {
+      "path": "../../packages/infra-postgres"
+    },
+    {
+      "path": "../../packages/infra-kafka"
+    },
+    {
+      "path": "../../packages/observability"
+    }
+  ]
+}

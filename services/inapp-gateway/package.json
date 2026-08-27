@@ -1,0 +1,17 @@
+{
+  "name": "@notification-system/inapp-gateway",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@notification-system/infra-redis": "workspace:*",
+    "@notification-system/observability": "workspace:*"
+  }
+}

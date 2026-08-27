@@ -1,0 +1,28 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/shared-kernel" },
+    { "path": "packages/domain-identity" },
+    { "path": "packages/domain-notification" },
+    { "path": "packages/domain-preferences" },
+    { "path": "packages/domain-templates" },
+    { "path": "packages/observability" },
+    { "path": "packages/infra-postgres" },
+    { "path": "packages/infra-cassandra" },
+    { "path": "packages/infra-kafka" },
+    { "path": "packages/infra-redis" },
+    { "path": "packages/providers-sms" },
+    { "path": "packages/providers-push" },
+    { "path": "packages/providers-email" },
+    { "path": "services/api" },
+    { "path": "services/router" },
+    { "path": "services/scheduler" },
+    { "path": "services/fanout-expander" },
+    { "path": "services/projection-notification" },
+    { "path": "services/worker-sms" },
+    { "path": "services/worker-push" },
+    { "path": "services/worker-email" },
+    { "path": "services/worker-inapp" },
+    { "path": "services/inapp-gateway" }
+  ]
+}
