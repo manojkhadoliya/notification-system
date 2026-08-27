@@ -30,9 +30,13 @@ docker-compose.yml runs:
               read-through cache in front of postgres, and pub/sub for
               worker-inapp <-> inapp-gateway)
   kafka      (official image, KRaft mode — no separate Zookeeper needed)
+  jaeger     (all-in-one image, OTLP/HTTP receiver — trace backend for
+              packages/observability's startTracing(); UI on :16686)
   api, router, scheduler, fanout-expander,
   worker-sms, worker-push, worker-email, worker-inapp, inapp-gateway,
-  projection-notification (built from this repo)
+  projection-notification (built from this repo, once each has a
+              Dockerfile — Phase 1; the Phase 0 compose file brings up
+              only the four infra containers above)
 ```
 
 No `cassandra` service in Phase 1 — `infra-cassandra`'s port shape is
@@ -73,6 +77,7 @@ a paid/scaled equivalent:
 | Broker (notification delivery) | Upstash Kafka or Confluent Cloud free tier | Confluent Cloud (dedicated) / Amazon MSK | connection string + credentials swap (both speak the Kafka protocol) |
 | Wide-column store (notification delivery, once adopted — see [`scaling-strategy.md`](scaling-strategy.md#storage-phasing)) | DataStax Astra DB free tier | Astra DB (paid) / self-hosted Scylla cluster | connection string swap (Astra is managed Cassandra) |
 | Cache | Upstash free tier | AWS ElastiCache | connection string swap (both are Redis-compatible) |
+| Tracing | Grafana Cloud / Honeycomb free tier | Same (or self-managed Tempo) | endpoint swap (both speak OTLP, same as local Jaeger) |
 
 Because every one of these is used via its vanilla open protocol (not a
 proprietary managed API), most of this table is genuinely just an

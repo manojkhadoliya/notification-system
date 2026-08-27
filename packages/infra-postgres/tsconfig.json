@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"],
+  "references": [
+    {
+      "path": "../domain-identity"
+    },
+    {
+      "path": "../domain-preferences"
+    },
+    {
+      "path": "../domain-templates"
+    },
+    {
+      "path": "../domain-notification"
+    }
+  ]
+}

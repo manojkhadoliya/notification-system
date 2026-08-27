@@ -1,0 +1,23 @@
+{
+  "name": "@notification-system/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@notification-system/domain-identity": "workspace:*",
+    "@notification-system/domain-notification": "workspace:*",
+    "@notification-system/domain-preferences": "workspace:*",
+    "@notification-system/domain-templates": "workspace:*",
+    "@notification-system/infra-postgres": "workspace:*",
+    "@notification-system/infra-kafka": "workspace:*",
+    "@notification-system/infra-redis": "workspace:*",
+    "@notification-system/observability": "workspace:*"
+  }
+}

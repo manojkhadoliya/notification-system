@@ -1,0 +1,8 @@
+packages:
+  - "packages/*"
+  - "services/*"
+allowBuilds:
+  # protobufjs's postinstall precompiles static message definitions —
+  # standard for gRPC/protobuf-based packages (pulled in transitively by
+  # the OTel exporters in packages/observability); safe to allow.
+  protobufjs: true

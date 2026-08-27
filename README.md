@@ -6,8 +6,23 @@ via message queues, retries with dead-letter handling, multi-tenancy, rate
 limiting, and a Domain-Driven Design / hexagonal architecture that keeps
 business logic decoupled from infrastructure choices.
 
-**Status:** architecture and documentation phase. No application code yet —
-see [`docs/roadmap.md`](docs/roadmap.md) for the build plan.
+**Status:** Phase 0 (scaffolding) — the pnpm workspace, lint/typecheck/
+DDD-boundary CI pipeline, local infra (`docker-compose.yml`), and Kafka
+topic topology exist; no domain logic yet. See
+[`docs/roadmap.md`](docs/roadmap.md) for the build plan.
+
+## Getting started
+
+```
+pnpm install
+pnpm build            # tsc -b across every package/service
+pnpm lint              # eslint
+pnpm format            # prettier --check
+pnpm boundaries         # dependency-cruiser: domain-* can't import infra-*/providers-*
+
+pnpm compose:up          # postgres, redis, kafka, jaeger (docker required)
+pnpm kafka:topics         # create every topic in the topology (idempotent)
+```
 
 ## Start here
 
@@ -48,7 +63,9 @@ packages/
   infra-*/            adapters implementing domain ports (Postgres, Kafka, Cassandra, Redis)
   providers-*/        adapters for external channel providers (Twilio, FCM, ...)
   shared-kernel/       minimal cross-context value objects
-infra/               local infrastructure (docker-compose)
+  observability/       shared OpenTelemetry bootstrap (startTracing)
+infra/               local infrastructure (docker-compose: postgres,
+                     redis, kafka, jaeger)
 docs/                architecture docs and ADRs
 ```
 
@@ -61,5 +78,5 @@ Node.js / TypeScript, Fastify, PostgreSQL (Prisma) — including
 notification-delivery's read model for Phase 1, with Cassandra/ScyllaDB
 adopted later at a measured threshold (polyglot persistence per bounded
 context, see [ADR 0003](docs/adr/0003-polyglot-persistence.md), revised) —
-Kafka, Redis, Docker Compose for local dev, free-tier hosting for the
-public demo.
+Kafka, Redis, Docker Compose for local dev, OpenTelemetry traces exported
+to Jaeger, free-tier hosting for the public demo.

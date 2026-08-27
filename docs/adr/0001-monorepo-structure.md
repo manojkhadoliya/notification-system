@@ -59,6 +59,9 @@ notification-system/
     domain-identity/             Tenant/ApiKey domain + RateLimitPolicy
     domain-templates/             Template/TemplateVersion domain + TemplateRepository port
     shared-kernel/                 minimal cross-context value objects only
+    observability/                 shared OpenTelemetry bootstrap
+                                    (startTracing), used by every
+                                    services/* composition root
     infra-postgres/             Prisma schema + repository port adapters for
                                  domain-identity/domain-preferences/domain-templates,
                                  and — Phase 1 — domain-notification's read
@@ -72,8 +75,9 @@ notification-system/
     providers-push/                 FCM + mock PushGateway adapters
     providers-email/                 SES/SendGrid + mock EmailGateway adapters
   infra/
-    docker-compose.yml           postgres, redis, kafka, services/* containers
-                                  (no cassandra until a threshold is crossed)
+    docker-compose.yml           postgres, redis, kafka, jaeger, services/*
+                                  containers (no cassandra until a
+                                  threshold is crossed)
   docs/
     architecture/                 system design docs
     adr/                          decision records (this file included)

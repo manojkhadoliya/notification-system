@@ -1,0 +1,10 @@
+dist
+node_modules
+pnpm-lock.yaml
+.claude
+
+# Prose docs predate this tooling and aren't hand-formatted to Prettier's
+# opinions (list-marker style, heading blank lines, etc.) — reformatting
+# them now would be a repo-wide diff unrelated to Phase 0 scaffolding.
+# Revisit if the docs are ever run through Prettier deliberately.
+*.md
