@@ -11,10 +11,10 @@ export default tseslint.config(
       "**/node_modules/**",
       "**/*.config.*",
       ".dependency-cruiser.cjs",
-      // Runs against compiled dist/ output post-build, not part of any
-      // package's tsconfig project graph — same reason as the root
-      // config files above.
-      "packages/infra-postgres/scripts/**",
+      // Smoke-test scripts run against compiled dist/ output post-build,
+      // not part of any package's tsconfig project graph — same reason as
+      // the root config files above.
+      "packages/*/scripts/**",
       ".claude/**",
     ],
   },
