@@ -32,5 +32,8 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Unit tests
+        run: pnpm test
+
       - name: DDD boundary check (dependency-cruiser)
         run: pnpm boundaries
