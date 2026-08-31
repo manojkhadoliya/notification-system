@@ -128,7 +128,18 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       takes a `resolvePolicy` constructor seam defaulting to
       `createDefaultRateLimitPolicy` rather than this adapter inventing
       persistence that isn't scoped yet
-- [ ] `providers-sms`: Twilio adapter + mock adapter (env-toggled)
+- [x] `providers-sms`: `TwilioSmsGateway` (calls Twilio's REST API
+      directly over `fetch`, not the `twilio` SDK) + `MockSmsGateway`
+      (configurable success rate/latency), selected by the composition
+      root's env config. Both interpret `renderedPayload` as `{ to, body
+      }` — a contract this package had to define, since
+      `ChannelCommand`/`domain-notification` deliberately don't (see
+      `providers-sms/README.md`). Also `verifyTwilioSignature` for
+      `POST /v1/webhooks/twilio`. 22 unit tests, including
+      `TwilioSmsGateway`'s request-building and retryable-status
+      classification against a stubbed `fetch` (no live Twilio account
+      needed for that) and `verifyTwilioSignature` against
+      self-generated fixtures
 - [ ] `providers-push`: FCM adapter + mock adapter (env-toggled)
 - [ ] `providers-email`: SES/SendGrid adapter + mock adapter (env-toggled)
 - [ ] `services/api`: `POST/GET /v1/notifications` (Door 1 — accepts an

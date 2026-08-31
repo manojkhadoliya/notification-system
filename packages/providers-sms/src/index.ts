@@ -1,5 +1,13 @@
-// Phase 0 scaffold — see docs/roadmap.md. Entities, ports, and adapter logic for this package land in Phase 1;
-// this file exists so the workspace, the TypeScript project-reference
-// graph, and the lint/typecheck/boundary-check pipeline all have something
-// real to build against.
-export {};
+export { parseSmsPayload } from "./sms-payload.js";
+export type { SmsRenderedPayload } from "./sms-payload.js";
+
+export { verifyTwilioSignature } from "./twilio-signature.js";
+
+export {
+  TwilioSmsGateway,
+  isRetryableTwilioStatus,
+} from "./twilio-sms-gateway.js";
+export type { TwilioConfig } from "./twilio-sms-gateway.js";
+
+export { MockSmsGateway } from "./mock-sms-gateway.js";
+export type { MockSmsGatewayOptions } from "./mock-sms-gateway.js";
