@@ -147,6 +147,9 @@ importers:
       '@notification-system/domain-notification':
         specifier: workspace:*
         version: link:../domain-notification
+      '@notification-system/shared-kernel':
+        specifier: workspace:*
+        version: link:../shared-kernel
 
   packages/providers-sms:
     dependencies:

@@ -1,5 +1,11 @@
-// Phase 0 scaffold — see docs/roadmap.md. Entities, ports, and adapter logic for this package land in Phase 1;
-// this file exists so the workspace, the TypeScript project-reference
-// graph, and the lint/typecheck/boundary-check pipeline all have something
-// real to build against.
-export {};
+export { parsePushPayload } from "./push-payload.js";
+export type { PushRenderedPayload } from "./push-payload.js";
+
+export { buildFcmAssertionJwt, DEFAULT_FCM_TOKEN_URI } from "./fcm-auth.js";
+export type { ServiceAccountCredentials } from "./fcm-auth.js";
+
+export { FcmPushGateway, isRetryableFcmError } from "./fcm-push-gateway.js";
+export type { FcmConfig } from "./fcm-push-gateway.js";
+
+export { MockPushGateway } from "./mock-push-gateway.js";
+export type { MockPushGatewayOptions } from "./mock-push-gateway.js";
