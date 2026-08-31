@@ -320,6 +320,9 @@ importers:
       '@notification-system/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@notification-system/shared-kernel':
+        specifier: workspace:*
+        version: link:../../packages/shared-kernel
 
   services/worker-push:
     dependencies:
