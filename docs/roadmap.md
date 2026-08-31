@@ -208,9 +208,9 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       [ADR 0010](adr/0010-delivery-reliability.md). The orchestration
       itself (`domain-notification`'s `DispatchService`) is already built
       and tested (above); `infra-postgres`'s `DedupeRepository` adapter
-      was already built too. `services/worker-sms` (below) proves the
-      composition-root wiring pattern end to end; `worker-push`/
-      `-email`/`-inapp` still need it replicated
+      was already built too. `services/worker-sms`/`worker-push` (below)
+      prove the composition-root wiring pattern end to end; `-email`/
+      `-inapp` still need it replicated
 - [ ] `scheduled_notifications` table + `services/scheduler` (new) —
       poller sharded by `(due_minute, bucket)`, jittered `due_at` from the
       start — see [ADR 0011](adr/0011-scheduling-and-fanout.md)
@@ -249,9 +249,17 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       per-provider circuit-breaker policy isn't something to improvise
       silently; revisit as a deliberate addition if a real need for one
       shows up
-- [ ] `services/worker-push`, `services/worker-email`: same shape as
-      `services/worker-sms` above, against `providers-push`/
-      `providers-email`
+- [x] `services/worker-push`: same shape as `services/worker-sms` above
+      (identical `WorkerService`, same retry-ladder/rate-limit-requeue
+      logic), against `providers-push` — `PUSH_PROVIDER=fcm` (+
+      `FCM_PROJECT_ID`/`FCM_CLIENT_EMAIL`/`FCM_PRIVATE_KEY`) selects the
+      real `FcmPushGateway`, defaulting to `MockPushGateway`. 15 unit
+      tests. **Not yet run against live Postgres/Kafka/Redis** — see
+      [`services/worker-push/README.md`](../services/worker-push/README.md#testing)
+      for `smoke-test.mjs`
+- [ ] `services/worker-email`: same shape, against `providers-email`
+      (mock adapter only, by explicit decision — see
+      `providers-email/README.md`)
 - [ ] `services/worker-inapp`: consume `command.in_app` + retry tiers,
       dedupe claim, write `NotificationFeedItem`, publish to Redis
       pub/sub — socket holding moved out, see next item
