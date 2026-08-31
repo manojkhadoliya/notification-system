@@ -15,6 +15,11 @@ export interface TemplateRepository {
   saveTemplate(template: Template): Promise<void>;
 
   findVersion(id: TemplateVersionId): Promise<TemplateVersion | null>;
+  /** Every version of a template, across all locales — what
+   * `GET /v1/templates/:id` returns (see api-spec.md: "Return a template
+   * and its version history"). Unlike `findLatestVersion`, not scoped to
+   * one `locale`. */
+  findVersionHistory(templateId: TemplateId): Promise<TemplateVersion[]>;
   /** The version `services/router` resolves to when a request specifies a
    * `notificationType` + channel but not an explicit `templateVersionId`
    * — see messaging.md#router. "Latest" is scoped per locale, since two

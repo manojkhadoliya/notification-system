@@ -8,16 +8,20 @@
   "scripts": {
     "build": "tsc -b",
     "clean": "tsc -b --clean",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test": "node --test \"dist/**/*.test.js\"",
+    "smoke-test": "node scripts/smoke-test.mjs"
   },
   "dependencies": {
+    "@notification-system/shared-kernel": "workspace:*",
     "@notification-system/domain-identity": "workspace:*",
     "@notification-system/domain-notification": "workspace:*",
     "@notification-system/domain-preferences": "workspace:*",
     "@notification-system/domain-templates": "workspace:*",
-    "@notification-system/infra-postgres": "workspace:*",
     "@notification-system/infra-kafka": "workspace:*",
+    "@notification-system/infra-postgres": "workspace:*",
     "@notification-system/infra-redis": "workspace:*",
-    "@notification-system/observability": "workspace:*"
+    "@notification-system/observability": "workspace:*",
+    "fastify": "^5.12.1"
   }
 }

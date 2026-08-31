@@ -89,6 +89,13 @@ export class PostgresPreferenceRepository implements PreferenceRepository {
     return rows.map(preferenceToDomain);
   }
 
+  async findAllPreferences(recipientId: RecipientId): Promise<Preference[]> {
+    const rows = await this.prisma.preference.findMany({
+      where: { recipientId },
+    });
+    return rows.map(preferenceToDomain);
+  }
+
   async findPreference(
     recipientId: RecipientId,
     channel: Channel,
