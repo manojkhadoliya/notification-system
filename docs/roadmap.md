@@ -257,9 +257,14 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       tests. **Not yet run against live Postgres/Kafka/Redis** — see
       [`services/worker-push/README.md`](../services/worker-push/README.md#testing)
       for `smoke-test.mjs`
-- [ ] `services/worker-email`: same shape, against `providers-email`
-      (mock adapter only, by explicit decision — see
-      `providers-email/README.md`)
+- [x] `services/worker-email`: same shape as `services/worker-sms`/
+      `-push` above, against `providers-email` (mock adapter only, by
+      explicit decision — see `providers-email/README.md`; `config.ts`
+      has no provider-selection branch to match, only
+      `MOCK_EMAIL_SUCCESS_RATE`/`MOCK_EMAIL_LATENCY_MS`). 13 unit tests.
+      **Not yet run against live Postgres/Kafka/Redis** — see
+      [`services/worker-email/README.md`](../services/worker-email/README.md#testing)
+      for `smoke-test.mjs`
 - [ ] `services/worker-inapp`: consume `command.in_app` + retry tiers,
       dedupe claim, write `NotificationFeedItem`, publish to Redis
       pub/sub — socket holding moved out, see next item
