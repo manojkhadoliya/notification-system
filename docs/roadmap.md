@@ -113,9 +113,21 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       "hold until the tier elapses" behavior is deliberately **not**
       here — that's timing logic for each channel worker to build using
       this package, not a generic consumer wrapper's job
-- [ ] `infra-redis`: `RateLimiter` + `IdempotencyStore` adapters, plus a
-      pub/sub adapter for `worker-inapp` ↔ `inapp-gateway` (see
-      [ADR 0012](adr/0012-inapp-gateway-split.md))
+- [x] `infra-redis`: `RedisRateLimiter` (token bucket, atomic read-refill-
+      write via a Lua script; the bucket math itself is a pure function
+      with its own unit tests — 6 pass), `RedisIdempotencyStore`, and
+      `RedisInAppGateway` + `InAppSubscriber` (pub/sub adapter for
+      `worker-inapp` ↔ `inapp-gateway`, see
+      [ADR 0012](adr/0012-inapp-gateway-split.md)). **Not yet run against
+      a live Redis** — no Docker in the session this was built in; see
+      [`infra-redis/README.md`](../packages/infra-redis/README.md#local-setup)
+      for `smoke-test.mjs`. Building this adapter surfaced two real gaps,
+      both fixed here: `domain-notification` had no `IdempotencyStore`
+      port at all (added, alongside `RedisIdempotencyStore`), and no
+      `RateLimitPolicy` repository/table exists yet, so `RedisRateLimiter`
+      takes a `resolvePolicy` constructor seam defaulting to
+      `createDefaultRateLimitPolicy` rather than this adapter inventing
+      persistence that isn't scoped yet
 - [ ] `providers-sms`: Twilio adapter + mock adapter (env-toggled)
 - [ ] `providers-push`: FCM adapter + mock adapter (env-toggled)
 - [ ] `providers-email`: SES/SendGrid adapter + mock adapter (env-toggled)

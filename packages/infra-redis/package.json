@@ -7,10 +7,14 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc -b",
-    "clean": "tsc -b --clean"
+    "clean": "tsc -b --clean",
+    "test": "node --test \"dist/**/*.test.js\"",
+    "smoke-test": "node scripts/smoke-test.mjs"
   },
   "dependencies": {
+    "@notification-system/shared-kernel": "workspace:*",
     "@notification-system/domain-identity": "workspace:*",
-    "@notification-system/domain-notification": "workspace:*"
+    "@notification-system/domain-notification": "workspace:*",
+    "ioredis": "^6.0.0"
   }
 }
