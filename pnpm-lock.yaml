@@ -338,6 +338,9 @@ importers:
       '@notification-system/providers-push':
         specifier: workspace:*
         version: link:../../packages/providers-push
+      '@notification-system/shared-kernel':
+        specifier: workspace:*
+        version: link:../../packages/shared-kernel
 
   services/worker-sms:
     dependencies:
