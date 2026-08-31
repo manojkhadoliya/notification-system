@@ -7,9 +7,11 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc -b",
-    "clean": "tsc -b --clean"
+    "clean": "tsc -b --clean",
+    "test": "node --test \"dist/**/*.test.js\""
   },
   "dependencies": {
+    "@notification-system/shared-kernel": "workspace:*",
     "@notification-system/domain-notification": "workspace:*"
   }
 }
