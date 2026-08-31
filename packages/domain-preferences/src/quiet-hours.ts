@@ -76,3 +76,27 @@ export function isWithinQuietHours(
 export function minuteOfDay(date: Date): number {
   return date.getHours() * 60 + date.getMinutes();
 }
+
+/**
+ * The next instant `quietHours` is exited, given `now` is already inside
+ * it (i.e. `isWithinQuietHours(atMinuteOfDay, quietHours)` is true) —
+ * `services/router` uses this to compute `ScheduledNotification.dueAt`
+ * when deferring for quiet hours (see messaging.md#router). `atMinuteOfDay`
+ * is the caller-computed minute-of-day for `now`, same convention as
+ * `isWithinQuietHours` — this function stays timezone-agnostic rather
+ * than assuming which clock produced it.
+ *
+ * Works uniformly across same-day, overnight, and "start === end"
+ * (all-day) windows by measuring minutes forward from `atMinuteOfDay` to
+ * `endMinute`, wrapping to the next day whenever that gap would otherwise
+ * be zero (exactly on the boundary) or negative.
+ */
+export function nextQuietHoursEnd(
+  now: Date,
+  atMinuteOfDay: number,
+  quietHours: QuietHours,
+): Date {
+  const minutesUntilEnd =
+    (quietHours.endMinute - atMinuteOfDay + 24 * 60) % (24 * 60) || 24 * 60;
+  return new Date(now.getTime() + minutesUntilEnd * 60_000);
+}

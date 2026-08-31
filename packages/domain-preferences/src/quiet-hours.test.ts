@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isWithinQuietHours, quietHoursFromClock } from "./quiet-hours.js";
+import {
+  isWithinQuietHours,
+  nextQuietHoursEnd,
+  quietHoursFromClock,
+} from "./quiet-hours.js";
 
 test("same-day window: inside", () => {
   const q = quietHoursFromClock(13, 0, 14, 0); // 13:00-14:00
@@ -48,4 +52,39 @@ test("quietHoursFromClock rejects out-of-range values", () => {
   assert.throws(() => quietHoursFromClock(24, 0, 6, 0));
   assert.throws(() => quietHoursFromClock(-1, 0, 6, 0));
   assert.throws(() => quietHoursFromClock(6, 0, 0, 60));
+});
+
+test("nextQuietHoursEnd: same-day window ends later today", () => {
+  const q = quietHoursFromClock(13, 0, 14, 0); // 13:00-14:00
+  const now = new Date("2026-01-01T13:30:00.000Z");
+  const dueAt = nextQuietHoursEnd(now, 13 * 60 + 30, q);
+  assert.equal(dueAt.toISOString(), "2026-01-01T14:00:00.000Z");
+});
+
+test("nextQuietHoursEnd: overnight window, before midnight, ends tomorrow", () => {
+  const q = quietHoursFromClock(22, 0, 6, 0); // 22:00-06:00
+  const now = new Date("2026-01-01T23:00:00.000Z");
+  const dueAt = nextQuietHoursEnd(now, 23 * 60, q);
+  assert.equal(dueAt.toISOString(), "2026-01-02T06:00:00.000Z");
+});
+
+test("nextQuietHoursEnd: overnight window, after midnight, ends later today", () => {
+  const q = quietHoursFromClock(22, 0, 6, 0); // 22:00-06:00
+  const now = new Date("2026-01-02T03:00:00.000Z");
+  const dueAt = nextQuietHoursEnd(now, 3 * 60, q);
+  assert.equal(dueAt.toISOString(), "2026-01-02T06:00:00.000Z");
+});
+
+test("nextQuietHoursEnd: all-day window (start === end) exactly on the boundary wraps to tomorrow", () => {
+  const q = quietHoursFromClock(9, 0, 9, 0);
+  const now = new Date("2026-01-01T09:00:00.000Z");
+  const dueAt = nextQuietHoursEnd(now, 9 * 60, q);
+  assert.equal(dueAt.toISOString(), "2026-01-02T09:00:00.000Z");
+});
+
+test("nextQuietHoursEnd: all-day window ends later the same day when not on the boundary", () => {
+  const q = quietHoursFromClock(9, 0, 9, 0);
+  const now = new Date("2026-01-01T05:00:00.000Z");
+  const dueAt = nextQuietHoursEnd(now, 5 * 60, q);
+  assert.equal(dueAt.toISOString(), "2026-01-01T09:00:00.000Z");
 });

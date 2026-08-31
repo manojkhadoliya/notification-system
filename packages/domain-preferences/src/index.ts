@@ -8,6 +8,7 @@ export {
   quietHoursFromClock,
   isWithinQuietHours,
   minuteOfDay,
+  nextQuietHoursEnd,
 } from "./quiet-hours.js";
 export type { QuietHours } from "./quiet-hours.js";
 
