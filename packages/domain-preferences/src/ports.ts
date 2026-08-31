@@ -7,14 +7,22 @@ export interface PreferenceRepository {
   findRecipient(id: RecipientId): Promise<Recipient | null>;
   saveRecipient(recipient: Recipient): Promise<void>;
 
-  /** All preferences for one recipient — the router needs the full set to
-   * pick a channel when none was requested (see
-   * messaging.md#router: "the router picks from the recipient's
-   * opted-in channels for that notificationType"), not just one row. */
+  /** All preferences for one recipient, scoped to one notification type —
+   * the router needs the full set to pick a channel when none was
+   * requested (see messaging.md#router: "the router picks from the
+   * recipient's opted-in channels for that notificationType"), not just
+   * one row. */
   findPreferences(
     recipientId: RecipientId,
     notificationType: string,
   ): Promise<Preference[]>;
+  /** Every preference row for a recipient, across all notification types
+   * — what `GET /v1/preferences/:recipientId` returns (see api-spec.md:
+   * "Return all channel/notification-type preferences for a recipient").
+   * Unlike `findPreferences`, not scoped to one `notificationType` — a
+   * tenant managing a recipient's settings needs to see everything at
+   * once, not query type by type. */
+  findAllPreferences(recipientId: RecipientId): Promise<Preference[]>;
   findPreference(
     recipientId: RecipientId,
     channel: Channel,

@@ -75,6 +75,14 @@ export class PostgresTemplateRepository implements TemplateRepository {
     return row === null ? null : versionToDomain(row);
   }
 
+  async findVersionHistory(templateId: TemplateId): Promise<TemplateVersion[]> {
+    const rows = await this.prisma.templateVersion.findMany({
+      where: { templateId },
+      orderBy: { version: "asc" },
+    });
+    return rows.map(versionToDomain);
+  }
+
   async findLatestVersion(
     templateId: TemplateId,
     locale: Locale,

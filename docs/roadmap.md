@@ -162,12 +162,25 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       `providers-email/README.md`). Interprets `renderedPayload` as
       `{ to, subject, body }`, matching `ChannelCommand`'s "subject+body
       shape for email" doc comment. 9 unit tests
-- [ ] `services/api`: `POST/GET /v1/notifications` (Door 1 — accepts an
+- [x] `services/api`: `POST/GET /v1/notifications` (Door 1 — accepts an
       intent, one `recipientId`, optional channel override; no audience
       descriptor — see [`architecture/api-spec.md`](architecture/api-spec.md)),
-      `GET/PUT /v1/preferences`, template management endpoints, in-app
-      feed endpoints, producing to the event backbone (no outbox relay —
-      see ADR 0008)
+      `GET/PUT /v1/preferences`, template management endpoints, producing
+      to the event backbone (no outbox relay — see ADR 0008). Fastify
+      (ADR 0007), Bearer-token auth (SHA-256-hashed key lookup),
+      idempotency (`infra-redis`), ingest-time rate limiting. First
+      composition root wired with real dependency injection — 39 unit
+      tests via `app.inject()` against in-memory port fakes, no live
+      infra needed. **Not yet run against live Postgres/Kafka/Redis** —
+      no Docker in the session this was built in; see
+      [`services/api/README.md`](../services/api/README.md#testing) for
+      `smoke-test.mjs`. In-app feed endpoints and the Twilio webhook are
+      deliberately deferred (see that README's "What's built" section);
+      building this surfaced two real port gaps, both fixed here:
+      `PreferenceRepository` had no way to fetch every preference for a
+      recipient (added `findAllPreferences`), and `TemplateRepository`
+      had no way to fetch a template's full version history (added
+      `findVersionHistory`) — both implemented in `infra-postgres` too
 - [ ] `services/router` (new) — preferences + quiet hours + channel
       resolution + template render, publishes self-contained
       `command.*` — see [ADR 0009](adr/0009-event-backbone-router.md).

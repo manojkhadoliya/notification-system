@@ -15,6 +15,7 @@ export default tseslint.config(
       // not part of any package's tsconfig project graph — same reason as
       // the root config files above.
       "packages/*/scripts/**",
+      "services/*/scripts/**",
       ".claude/**",
     ],
   },

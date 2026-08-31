@@ -55,6 +55,15 @@ throughput regardless of total partition count.
   free demo tenants) without changing the enforcement mechanism.
 - Exceeding the limit at ingest returns `429`; exceeding it at dispatch
   time re-queues the message with backoff rather than dropping it.
+- **Implementation note, added during Phase 1 (`services/api`):** since
+  the token bucket is keyed by `(tenantId, channel)`, ingest-time
+  enforcement only actually applies when a request supplies an explicit
+  `channel` override — Door 1's channel is usually unresolved until
+  `services/router` runs, so there's no channel-scoped bucket to check
+  against otherwise. An unrouted request is instead capped at dispatch
+  time once a channel exists, which is still the same enforcement point
+  every request eventually passes through — see
+  [`../../services/api/README.md`](../../services/api/README.md#judgment-calls-worth-knowing-about).
 - **Known scaling edge case:** a `(tenantId, channel)` token-bucket key is a
   single Redis key, so an extremely high-volume tenant concentrates its
   rate-limit checks on one Redis Cluster shard. Not a problem at the growth
