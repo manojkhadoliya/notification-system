@@ -299,6 +299,9 @@ importers:
       '@notification-system/providers-email':
         specifier: workspace:*
         version: link:../../packages/providers-email
+      '@notification-system/shared-kernel':
+        specifier: workspace:*
+        version: link:../../packages/shared-kernel
 
   services/worker-inapp:
     dependencies:
