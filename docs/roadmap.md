@@ -140,7 +140,19 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       classification against a stubbed `fetch` (no live Twilio account
       needed for that) and `verifyTwilioSignature` against
       self-generated fixtures
-- [ ] `providers-push`: FCM adapter + mock adapter (env-toggled)
+- [x] `providers-push`: `FcmPushGateway` (calls FCM's HTTP v1 API
+      directly over `fetch`; OAuth2 service-account auth hand-built with
+      `node:crypto` rather than `google-auth-library`, with in-memory
+      access-token caching) + `MockPushGateway` (configurable success
+      rate/latency), selected by the composition root's env config. Both
+      interpret `renderedPayload` as `{ token, title, body, data? }` — a
+      contract this package had to define, since `ChannelCommand`/
+      `domain-notification` deliberately don't (see
+      `providers-push/README.md`). 26 unit tests, including
+      `FcmPushGateway`'s token exchange, token caching/expiry, and error
+      classification against a stubbed `fetch`, and the JWT-signing logic
+      against a self-generated throwaway keypair (no live Firebase
+      project needed for any of it)
 - [ ] `providers-email`: SES/SendGrid adapter + mock adapter (env-toggled)
 - [ ] `services/api`: `POST/GET /v1/notifications` (Door 1 — accepts an
       intent, one `recipientId`, optional channel override; no audience
