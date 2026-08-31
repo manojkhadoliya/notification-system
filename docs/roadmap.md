@@ -153,7 +153,15 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       classification against a stubbed `fetch`, and the JWT-signing logic
       against a self-generated throwaway keypair (no live Firebase
       project needed for any of it)
-- [ ] `providers-email`: SES/SendGrid adapter + mock adapter (env-toggled)
+- [x] `providers-email`: `MockEmailGateway` only, by explicit decision —
+      a real SES/SendGrid adapter is deliberately deferred rather than
+      picked without a real need driving the choice (SES needs AWS
+      SigV4 signing, a materially bigger lift than Twilio/FCM's schemes;
+      SendGrid would match this repo's "no heavy SDK" pattern, so build
+      that one first whenever it's actually needed — see
+      `providers-email/README.md`). Interprets `renderedPayload` as
+      `{ to, subject, body }`, matching `ChannelCommand`'s "subject+body
+      shape for email" doc comment. 9 unit tests
 - [ ] `services/api`: `POST/GET /v1/notifications` (Door 1 — accepts an
       intent, one `recipientId`, optional channel override; no audience
       descriptor — see [`architecture/api-spec.md`](architecture/api-spec.md)),
