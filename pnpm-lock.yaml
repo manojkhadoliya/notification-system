@@ -359,6 +359,9 @@ importers:
       '@notification-system/providers-sms':
         specifier: workspace:*
         version: link:../../packages/providers-sms
+      '@notification-system/shared-kernel':
+        specifier: workspace:*
+        version: link:../../packages/shared-kernel
 
 packages:
 

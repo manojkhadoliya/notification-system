@@ -3,6 +3,15 @@ import type { Consumer, Kafka } from "kafkajs";
 export interface KafkaConsumerConfig {
   readonly groupId: string;
   readonly topics: string[];
+  /** Forwarded to kafkajs's `consumer.run()`. Defaults to `1`
+   * (kafkajs's own default) — sequential processing across every
+   * assigned partition. Raise this for a consumer whose handler can
+   * block for a while on some messages (e.g. a channel worker holding a
+   * retry-tier message until its backoff elapses — see
+   * messaging.md#retry-ladder): without it, one slow message stalls
+   * *every* other assigned partition behind it, including a different
+   * topic's freshly-arrived work. */
+  readonly partitionsConsumedConcurrently?: number;
 }
 
 export interface ConsumedMessage {
@@ -65,6 +74,12 @@ export class KafkaConsumer {
       fromBeginning: false,
     });
     await this.consumer.run({
+      ...(this.config.partitionsConsumedConcurrently !== undefined
+        ? {
+            partitionsConsumedConcurrently:
+              this.config.partitionsConsumedConcurrently,
+          }
+        : {}),
       eachMessage: async ({ topic, message }) => {
         await handler({
           topic,

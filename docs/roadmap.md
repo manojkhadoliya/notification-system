@@ -207,8 +207,10 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       immediately before the gateway call — see
       [ADR 0010](adr/0010-delivery-reliability.md). The orchestration
       itself (`domain-notification`'s `DispatchService`) is already built
-      and tested (above); what's left is `infra-postgres`'s
-      `DedupeRepository` adapter and each worker's composition-root wiring
+      and tested (above); `infra-postgres`'s `DedupeRepository` adapter
+      was already built too. `services/worker-sms` (below) proves the
+      composition-root wiring pattern end to end; `worker-push`/
+      `-email`/`-inapp` still need it replicated
 - [ ] `scheduled_notifications` table + `services/scheduler` (new) —
       poller sharded by `(due_minute, bucket)`, jittered `due_at` from the
       start — see [ADR 0011](adr/0011-scheduling-and-fanout.md)
@@ -219,11 +221,37 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       `NotificationRequest.status`, consuming `events.*` (accepted) +
       `delivery-status` (sent/delivered/failed), ordered state machine —
       see [ADR 0010](adr/0010-delivery-reliability.md#single-writer-status)
-- [ ] `services/worker-sms`, `services/worker-push`, `services/worker-email`:
-      consume `command.{channel}` + all three of that channel's retry
-      tiers (one process per channel, not per tier — see
-      [ADR 0010](adr/0010-delivery-reliability.md)), dedupe claim → dispatch
-      → publish outcome to `delivery-status`, circuit breaker
+- [x] `services/worker-sms`: consumes `command.sms` + all three retry
+      tiers (one process, not per tier — see
+      [ADR 0010](adr/0010-delivery-reliability.md)). `WorkerService` is
+      the thin layer around `DispatchService` (dedupe claim → rate limit
+      → send → DLQ/retry-scheduling, already built): tells a main-topic
+      message from a retry-tier one, holds the latter until its
+      `x-retry-after` elapses then re-publishes onto `command.sms` (not
+      a direct dispatch — every attempt goes through the same path), and
+      persists a `DeliveryAttempt` for whichever outcomes conclude one.
+      A rate-limited outcome re-queues at the same `attemptNumber` via
+      the shortest retry tier (30s) — not a `RetryPolicy`-tracked
+      attempt, since a rate-limit isn't a provider failure. 15 unit
+      tests against a real `DispatchService` wired to in-memory fakes.
+      **Not yet run against live Postgres/Kafka/Redis** — no Docker in
+      the session this was built in; see
+      [`services/worker-sms/README.md`](../services/worker-sms/README.md#testing)
+      for `smoke-test.mjs`. Building this surfaced a real gap in
+      `infra-kafka`'s `KafkaConsumer`: no way to process assigned
+      partitions concurrently, so a long retry-tier wait (up to 30 min)
+      would have stalled this worker's own fresh `command.sms` traffic
+      behind it — added an optional `partitionsConsumedConcurrently`
+      config (defaults to kafkajs's own default, no behavior change for
+      existing consumers). **"Circuit breaker" dropped from this item's
+      description** — nothing in ADR 0010/messaging.md specifies one
+      (only the retry ladder + DLQ), and inventing an undocumented
+      per-provider circuit-breaker policy isn't something to improvise
+      silently; revisit as a deliberate addition if a real need for one
+      shows up
+- [ ] `services/worker-push`, `services/worker-email`: same shape as
+      `services/worker-sms` above, against `providers-push`/
+      `providers-email`
 - [ ] `services/worker-inapp`: consume `command.in_app` + retry tiers,
       dedupe claim, write `NotificationFeedItem`, publish to Redis
       pub/sub — socket holding moved out, see next item
