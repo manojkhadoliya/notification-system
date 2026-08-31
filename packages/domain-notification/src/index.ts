@@ -38,6 +38,8 @@ export type {
 
 export type { RateLimiter } from "./rate-limiter.js";
 
+export type { IdempotencyRecord, IdempotencyStore } from "./idempotency.js";
+
 export type {
   NotificationEvent,
   DeliveryStatusEvent,
