@@ -51,11 +51,9 @@ export function buildServer(
       return;
     }
     request.log.error(error);
-    reply
-      .status(500)
-      .send({
-        error: { code: "internal_error", message: "internal server error" },
-      });
+    reply.status(500).send({
+      error: { code: "internal_error", message: "internal server error" },
+    });
   });
 
   app.register(async (instance) => notificationRoutes(instance, deps));
