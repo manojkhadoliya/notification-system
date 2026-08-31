@@ -181,10 +181,28 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       recipient (added `findAllPreferences`), and `TemplateRepository`
       had no way to fetch a template's full version history (added
       `findVersionHistory`) — both implemented in `infra-postgres` too
-- [ ] `services/router` (new) — preferences + quiet hours + channel
+- [x] `services/router` (new) — preferences + quiet hours + channel
       resolution + template render, publishes self-contained
-      `command.*` — see [ADR 0009](adr/0009-event-backbone-router.md).
-      **The single largest structural item in this phase.**
+      `command.*` plus an `accepted` outcome to `delivery-status` — see
+      [ADR 0009](adr/0009-event-backbone-router.md). **The single
+      largest structural item in this phase.** Channel decision logic
+      (`decideChannel`), template rendering (Handlebars), and per-channel
+      payload assembly are pure functions; the composition root
+      (`RouterService`) is only I/O sequencing. 32 unit tests, no fakes
+      needed for the pure functions, in-memory port fakes for
+      `RouterService` itself. **Not yet run against live Postgres/Kafka**
+      — no Docker in the session this was built in; see
+      [`services/router/README.md`](../services/router/README.md#testing)
+      for `smoke-test.mjs`. `domain-preferences` gained
+      `nextQuietHoursEnd` (computing a deferred notification's `dueAt`),
+      with its own unit tests. Several judgment calls and two
+      deliberately-deferred pieces (the `PreferenceRepository` Redis
+      read-through cache from `scaling-strategy.md`; template
+      auto-resolution by `notificationType`+`channel`) are documented in
+      that README rather than guessed at silently — including a real,
+      known limitation: quiet hours are enforced in UTC, not a
+      recipient's local time, since nothing in the domain model stores
+      one yet
 - [ ] Dedupe claim (`DedupeRepository`), wired into every `worker-*`
       immediately before the gateway call — see
       [ADR 0010](adr/0010-delivery-reliability.md). The orchestration
