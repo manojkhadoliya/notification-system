@@ -285,9 +285,33 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       `save()` on every attempt, not just the first). `GET /v1/feed/...`/
       mark-read still aren't wired into `services/api` — that's a
       separate future PR; the port and adapter they need now exist
-- [ ] `services/inapp-gateway` (new): stateless WebSocket registry,
-      subscribes to Redis pub/sub, pushes to connected recipients — see
-      [ADR 0012](adr/0012-inapp-gateway-split.md)
+- [x] `services/inapp-gateway`: stateless WebSocket registry
+      (`ConnectionRegistry`, in-memory `Map<recipientId, Set<socket>>`,
+      per-instance only per ADR 0012) at `GET /v1/feed/stream?recipientId=`,
+      fed by `infra-redis`'s `InAppSubscriber` on a dedicated connection.
+      No Kafka membership, no domain repository ports — connection
+      routing is purely mechanical, matching the ADR. 20 unit tests,
+      including real (loopback, ephemeral-port) WebSocket handshake/push/
+      disconnect tests in `server.ts` — there's no Fastify-`.inject()`
+      equivalent for a raw `ws` upgrade, so this is the closest thing to
+      a true unit test the transport allows, and it never touches
+      Docker/external infra. **Not yet run against live Redis** — see
+      [`services/inapp-gateway/README.md`](../services/inapp-gateway/README.md#local-setup)
+      for `smoke-test.mjs`. **Real gap surfaced and flagged, not fixed
+      here:** this service has no connection authentication —
+      `?recipientId=` is trusted as given, so anyone who can reach it and
+      knows a recipient's UUID can read that recipient's live
+      notifications. Nothing in `domain-identity` models a
+      recipient-scoped session/token an untrusted client could safely
+      present (only a tenant-scoped API key exists, which is a backend
+      secret and wrong to hand to a browser/mobile client), and ADR 0012
+      deliberately keeps this service free of domain repository ports, so
+      it can't look one up itself either. See
+      [`services/inapp-gateway/README.md#known-phase-1-gap-no-connection-authentication`](../services/inapp-gateway/README.md#known-phase-1-gap-no-connection-authentication)
+      for the full writeup and what resolving it would need (a signed
+      short-lived recipient token, or an authenticating edge/BFF in
+      front of it) — tracked here as a separate future item, not
+      invented unscoped inside this PR
 - [ ] Template rendering (Handlebars) wired into the router for
       template-driven requests
 - [ ] Unit tests: domain services (✅ done for all four `domain-*`
@@ -324,6 +348,17 @@ crossing a measured threshold that doesn't exist yet, or are load-bearing
 correctness/product improvements that are cheap to retrofit later because
 they're additive rather than structural.
 
+- [ ] `services/inapp-gateway` connection authentication — a real,
+      pre-existing-severity gap (not a nice-to-have): the WebSocket
+      handshake trusts `?recipientId=` as given, with no verification the
+      caller is that recipient. Needs a signed short-lived recipient
+      token (minted by `services/api` after whatever end-user auth the
+      tenant's own app performs, verified here without a repository
+      lookup) or an authenticating edge/BFF proxy in front of this
+      service — see
+      [`services/inapp-gateway/README.md#known-phase-1-gap-no-connection-authentication`](../services/inapp-gateway/README.md#known-phase-1-gap-no-connection-authentication).
+      Must be resolved before this service is reachable from anywhere
+      other than a trusted internal network or a local dev box.
 - [ ] Independent audit consumer group + analytics consumer group, off the
       delivery path, own offsets — see
       [`architecture/messaging.md`](architecture/messaging.md#future--audit-and-analytics-sinks-deferred).
