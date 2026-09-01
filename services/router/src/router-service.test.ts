@@ -181,15 +181,57 @@ describe("RouterService.handle", () => {
       }),
     );
 
-    const service = new RouterService(deps, () => NOW);
+    // Zero jitter: this test asserts an exact dueAt, so the random
+    // default (see MAX_DEFER_JITTER_MS) would make it flaky — the
+    // "defers with jitter" test below covers the non-zero case.
+    const service = new RouterService(
+      deps,
+      () => NOW,
+      () => 0,
+    );
     await service.handle(event);
 
     assert.equal(deps.scheduledNotificationRepository.saved.length, 1);
     const scheduled = deps.scheduledNotificationRepository.saved[0]!;
     assert.equal(scheduled.dueAt.toISOString(), "2026-01-01T14:00:00.000Z");
     assert.equal(scheduled.notificationType, event.notificationType);
+    // Preserved, not re-minted — services/scheduler must re-emit under
+    // the same id the client was handed at 202 Accepted time.
+    assert.equal(scheduled.notificationRequestId, event.notificationRequestId);
     assert.equal(deps.messageBroker.publishedCommands.length, 0);
     assert.equal(deps.messageBroker.deliveryStatusEvents.length, 0);
+  });
+
+  it("defers with jitter added forward, never subtracted, from the computed dueAt", async () => {
+    const deps = makeDeps();
+    const event = makeEvent();
+    deps.preferenceRepository.seedRecipient(
+      Recipient.create({
+        id: event.recipientId,
+        tenantId: event.tenantId,
+        phone: "+1",
+      }),
+    );
+    deps.preferenceRepository.seedPreference(
+      Preference.create({
+        id: randomUUID(),
+        recipientId: event.recipientId,
+        channel: "sms",
+        notificationType: event.notificationType,
+        optedIn: true,
+        quietHours: quietHoursFromClock(10, 0, 14, 0), // 10:00-14:00 UTC, NOW is noon
+      }),
+    );
+
+    const service = new RouterService(
+      deps,
+      () => NOW,
+      () => 5_000,
+    );
+    await service.handle(event);
+
+    const scheduled = deps.scheduledNotificationRepository.saved[0]!;
+    assert.equal(scheduled.dueAt.toISOString(), "2026-01-01T14:00:05.000Z");
   });
 
   it("does nothing when the recipient doesn't exist", async () => {

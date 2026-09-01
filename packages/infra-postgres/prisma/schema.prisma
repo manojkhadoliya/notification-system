@@ -229,23 +229,33 @@ enum ScheduledNotificationStatus {
 }
 
 model ScheduledNotification {
-  id                String                      @id @default(uuid()) @db.Uuid
-  tenantId          String                      @map("tenant_id") @db.Uuid
-  recipientId       String                      @map("recipient_id") @db.Uuid
-  notificationType  String                      @map("notification_type")
-  channel           Channel?
-  templateVersionId String?                     @map("template_version_id") @db.Uuid
-  payload           Json
-  priority          Priority
-  dueAt             DateTime                    @map("due_at") @db.Timestamptz(6)
+  id                    String                      @id @default(uuid()) @db.Uuid
+  // The *original* NotificationEvent.notificationRequestId this row
+  // defers — distinct from `id` above. Preserved so services/scheduler
+  // re-emits under the same id the client was handed at 202 Accepted
+  // time, rather than minting a new one (which would make the deferred
+  // request permanently unqueryable via GET /v1/notifications/:id once
+  // re-emitted). See ScheduledNotification.schedule's doc comment.
+  notificationRequestId String                      @map("notification_request_id") @db.Uuid
+  tenantId              String                      @map("tenant_id") @db.Uuid
+  recipientId           String                      @map("recipient_id") @db.Uuid
+  notificationType      String                      @map("notification_type")
+  channel               Channel?
+  templateVersionId     String?                     @map("template_version_id") @db.Uuid
+  payload               Json
+  priority              Priority
+  // Same preserve-across-defer reasoning as notificationRequestId above —
+  // a fanout-expanded recipient's broadcastId back-reference, if present.
+  broadcastId           String?                     @map("broadcast_id") @db.Uuid
+  dueAt                 DateTime                    @map("due_at") @db.Timestamptz(6)
   // Derived from dueAt at write time — see ADR 0011#poller-sharding. Not
   // recomputed by Postgres (no generated column): the domain layer derives
   // it once, in ScheduledNotification.schedule, and this column just
   // stores that value so the poller's shard query can index on it.
-  dueMinute         Int                         @map("due_minute")
-  status            ScheduledNotificationStatus
-  claimedAt         DateTime?                   @map("claimed_at") @db.Timestamptz(6)
-  createdAt         DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  dueMinute             Int                         @map("due_minute")
+  status                ScheduledNotificationStatus
+  claimedAt             DateTime?                   @map("claimed_at") @db.Timestamptz(6)
+  createdAt             DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
 
   // The poller's claim query: "pending rows due by now, in my shard."
   @@index([status, dueMinute])
