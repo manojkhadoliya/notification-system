@@ -265,9 +265,26 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       **Not yet run against live Postgres/Kafka/Redis** — see
       [`services/worker-email/README.md`](../services/worker-email/README.md#testing)
       for `smoke-test.mjs`
-- [ ] `services/worker-inapp`: consume `command.in_app` + retry tiers,
-      dedupe claim, write `NotificationFeedItem`, publish to Redis
-      pub/sub — socket holding moved out, see next item
+- [x] `services/worker-inapp`: consumes `command.in_app` + retry tiers.
+      Structurally identical `WorkerService` to the other three workers,
+      but `DispatchService`'s "gateway" is `FeedWritingInAppGateway` (this
+      package's own) — writes a `NotificationFeedItem` row, then
+      delegates to `infra-redis`'s `RedisInAppGateway` for the pub/sub
+      nudge, rather than calling an external provider — since `in_app`
+      has no provider to call (see ADR 0012). Socket holding lives in
+      `services/inapp-gateway` (next item, not yet built). 17 unit tests.
+      **Not yet run against live Postgres/Kafka/Redis** — see
+      [`services/worker-inapp/README.md`](../services/worker-inapp/README.md#testing)
+      for `smoke-test.mjs`. Building this surfaced a real gap flagged
+      (not just noted) by `infra-postgres/README.md`: `domain-notification`
+      had no `NotificationFeedItem` entity or `NotificationFeedRepository`
+      port at all. Added both, plus the `notification_feed_items` table
+      and an upsert-by-`notificationRequestId` Postgres adapter (a
+      redelivered `command.in_app` message must write the same logical
+      feed row again, not a duplicate — `services/worker-inapp` calls
+      `save()` on every attempt, not just the first). `GET /v1/feed/...`/
+      mark-read still aren't wired into `services/api` — that's a
+      separate future PR; the port and adapter they need now exist
 - [ ] `services/inapp-gateway` (new): stateless WebSocket registry,
       subscribes to Redis pub/sub, pushes to connected recipients — see
       [ADR 0012](adr/0012-inapp-gateway-split.md)

@@ -11,6 +11,7 @@ import type {
 import type { ChannelCommand } from "./channel-command.js";
 import type { DedupeClaim } from "./dedupe-claim.js";
 import type { DeliveryAttempt } from "./delivery-attempt.js";
+import type { NotificationFeedItem } from "./notification-feed-item.js";
 import type { NotificationRequest } from "./notification-request.js";
 import type { ScheduledNotification } from "./scheduled-notification.js";
 
@@ -104,4 +105,31 @@ export interface ScheduledNotificationRepository {
     bucketCount: number;
     limit: number;
   }): Promise<ScheduledNotification[]>;
+}
+
+/** Write/read `NotificationFeedItem` rows — the `in_app` channel's only
+ * projection, written by `services/worker-inapp` (see
+ * messaging.md#in-app-is-structurally-different) and read by
+ * `GET /v1/feed/:recipientId`. */
+export interface NotificationFeedRepository {
+  /** Upsert keyed by `notificationRequestId` — a redelivered
+   * `command.in_app` message (a retry, or a Kafka at-least-once
+   * redelivery) writes the same logical feed item again, not a
+   * duplicate row. `services/worker-inapp` calls this on every attempt,
+   * not just the first, so this idempotency is the port's contract, not
+   * an optional adapter nicety. */
+  save(item: NotificationFeedItem): Promise<void>;
+  /** "The feed" — most recent first. `unreadOnly` filters to
+   * `readAt === null`. */
+  findByRecipient(
+    recipientId: RecipientId,
+    options?: { unreadOnly?: boolean },
+  ): Promise<NotificationFeedItem[]>;
+  /** `POST /v1/feed/:recipientId/:notificationRequestId/read` — a no-op
+   * if no matching row exists (nothing to mark read) or it's already
+   * read (see `NotificationFeedItem.markRead`'s doc comment). */
+  markRead(
+    recipientId: RecipientId,
+    notificationRequestId: NotificationRequestId,
+  ): Promise<void>;
 }

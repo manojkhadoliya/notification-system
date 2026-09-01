@@ -47,7 +47,11 @@ export type {
   NotificationRepository,
   DedupeRepository,
   ScheduledNotificationRepository,
+  NotificationFeedRepository,
 } from "./ports.js";
+
+export { NotificationFeedItem } from "./notification-feed-item.js";
+export type { NotificationFeedItemProps } from "./notification-feed-item.js";
 
 export { DispatchService } from "./dispatch-service.js";
 export type { DispatchOutcome } from "./dispatch-service.js";

@@ -34,10 +34,12 @@ Two adapters worth knowing about before touching them:
   `SELECT ... FOR UPDATE SKIP LOCKED` has no equivalent in Prisma's query
   builder. See ADR 0011#poller-sharding.
 
-`NotificationFeedItem` (the `in_app`-only feed projection) is **not**
-modeled here yet — no `domain-notification` port exists for it either
-(see `schema.prisma`'s comment on why); add both together when
-`services/worker-inapp` is built.
+- **`PostgresNotificationFeedRepository.save`** is an upsert keyed by
+  `notificationRequestId` — `services/worker-inapp` calls it on every
+  dispatch attempt, not just the first, so a redelivered
+  `command.in_app` message must write the same logical row again, not a
+  duplicate. Added alongside `services/worker-inapp` (it's the only
+  writer) — see `NotificationFeedRepository`'s doc comment.
 
 Depends on the `shared-kernel`/`domain-identity`/`domain-preferences`/
 `domain-templates`/`domain-notification` packages (to implement their port
