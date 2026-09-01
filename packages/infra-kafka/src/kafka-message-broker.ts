@@ -1,5 +1,7 @@
 import type { Producer } from "kafkajs";
 import type {
+  BroadcastChunk,
+  BroadcastRequest,
   ChannelCommand,
   DeliveryStatusEvent,
   MessageBroker,
@@ -10,6 +12,8 @@ import {
   DELIVERY_STATUS_TOPIC,
   dlqTopic,
   eventTopic,
+  EVENTS_BROADCAST_CHUNKS_TOPIC,
+  EVENTS_BROADCAST_TOPIC,
   retryTopic,
 } from "./topics.js";
 
@@ -84,6 +88,20 @@ export class KafkaMessageBroker implements MessageBroker {
           value: JSON.stringify(event),
         },
       ],
+    });
+  }
+
+  async publishBroadcast(request: BroadcastRequest): Promise<void> {
+    await this.producer.send({
+      topic: EVENTS_BROADCAST_TOPIC,
+      messages: [{ key: request.id, value: JSON.stringify(request) }],
+    });
+  }
+
+  async publishChunk(chunk: BroadcastChunk): Promise<void> {
+    await this.producer.send({
+      topic: EVENTS_BROADCAST_CHUNKS_TOPIC,
+      messages: [{ key: chunk.chunkId, value: JSON.stringify(chunk) }],
     });
   }
 }

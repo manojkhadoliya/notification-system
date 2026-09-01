@@ -1,4 +1,8 @@
-import type { Channel, RecipientId } from "@notification-system/shared-kernel";
+import type {
+  Channel,
+  RecipientId,
+  TenantId,
+} from "@notification-system/shared-kernel";
 import type { Preference } from "./preference.js";
 import type { Recipient } from "./recipient.js";
 import type { RecipientKey } from "./recipient-key.js";
@@ -6,6 +10,18 @@ import type { RecipientKey } from "./recipient-key.js";
 export interface PreferenceRepository {
   findRecipient(id: RecipientId): Promise<Recipient | null>;
   saveRecipient(recipient: Recipient): Promise<void>;
+  /** Every recipientId belonging to one tenant — `services/fanout-expander`'s
+   * only supported audience-descriptor resolution for Phase 1 (see its
+   * README): "the audienceDescriptor names this tenant's entire
+   * recipient set." No segmentation/tagging model exists yet to support
+   * anything richer. Returns ids only, not full `Recipient`s — a
+   * broadcast's fan-out only ever needs the id to build a `Chunk`.
+   *
+   * **Known Phase 1 scale limitation:** loads the whole result into
+   * memory in one call rather than a cursor/streaming API — fine for a
+   * local/demo-scale tenant, a real problem for a tenant with a very
+   * large recipient set. Revisit if that's ever actually hit. */
+  findRecipientIdsByTenant(tenantId: TenantId): Promise<RecipientId[]>;
 
   /** All preferences for one recipient, scoped to one notification type —
    * the router needs the full set to pick a channel when none was

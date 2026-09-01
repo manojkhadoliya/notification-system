@@ -8,6 +8,7 @@ import type {
   TemplateVersionId,
   TenantId,
 } from "@notification-system/shared-kernel";
+import type { BroadcastChunk, BroadcastRequest } from "./broadcast.js";
 import type { ChannelCommand } from "./channel-command.js";
 import type { DedupeClaim } from "./dedupe-claim.js";
 import type { DeliveryAttempt } from "./delivery-attempt.js";
@@ -62,6 +63,15 @@ export interface MessageBroker {
   /** Attempts exhausted (`RetryPolicy.isExhausted`) -> that channel's DLQ. */
   publishToDlq(command: ChannelCommand, reason: string): Promise<void>;
   publishDeliveryStatus(event: DeliveryStatusEvent): Promise<void>;
+  /** Door 2 (the producer library) -> `events.broadcast`, keyed by
+   * `broadcastId` — see messaging.md#broadcast-is-door-2-only. */
+  publishBroadcast(request: BroadcastRequest): Promise<void>;
+  /** `services/fanout-expander`'s stage 1 -> `events.broadcast.chunks`,
+   * keyed by `chunkId` — a documented exception to the `recipientId`
+   * keying every other topic uses, since a chunk carries many recipients
+   * and can't honestly be keyed by any single one of them. See
+   * ADR 0011. */
+  publishChunk(chunk: BroadcastChunk): Promise<void>;
 }
 
 /** Persist/query requests and attempts — read model only as of ADR 0009;

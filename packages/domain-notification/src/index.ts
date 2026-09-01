@@ -23,8 +23,12 @@ export type {
 
 export type { RoutingDecision } from "./routing-decision.js";
 
-export { MAX_RECIPIENTS_PER_CHUNK, assertValidChunkSize } from "./broadcast.js";
-export type { BroadcastRequest, Chunk } from "./broadcast.js";
+export {
+  MAX_RECIPIENTS_PER_CHUNK,
+  assertValidChunkSize,
+  splitIntoChunks,
+} from "./broadcast.js";
+export type { BroadcastRequest, Chunk, BroadcastChunk } from "./broadcast.js";
 
 export type { ChannelCommand } from "./channel-command.js";
 

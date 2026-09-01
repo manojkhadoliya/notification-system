@@ -109,6 +109,14 @@ export class FakePreferenceRepository implements PreferenceRepository {
     this.recipients.set(recipient.id, recipient);
   }
 
+  async findRecipientIdsByTenant(tenantId: TenantId): Promise<RecipientId[]> {
+    // Not exercised by services/api — that's services/fanout-expander's
+    // job — but trivial to implement for real from what's already seeded.
+    return [...this.recipients.values()]
+      .filter((r) => r.tenantId === tenantId)
+      .map((r) => r.id);
+  }
+
   async findPreferences(
     recipientId: RecipientId,
     notificationType: string,
@@ -223,6 +231,15 @@ export class FakeMessageBroker implements MessageBroker {
 
   async publishDeliveryStatus(event: DeliveryStatusEvent): Promise<void> {
     this.deliveryStatusEvents.push(event);
+  }
+
+  async publishBroadcast(): Promise<void> {
+    // Not exercised by services/api — Door 1 only accepts a single
+    // recipientId; broadcast is Door 2 only (see messaging.md).
+  }
+
+  async publishChunk(): Promise<void> {
+    // Not exercised by services/api — see publishBroadcast's comment above.
   }
 }
 
