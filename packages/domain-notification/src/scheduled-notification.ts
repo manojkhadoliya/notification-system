@@ -1,5 +1,7 @@
 import type {
+  BroadcastId,
   Channel,
+  NotificationRequestId,
   Priority,
   RecipientId,
   TemplateVersionId,
@@ -16,6 +18,14 @@ export type ScheduledNotificationStatus =
 
 export interface ScheduledNotificationProps {
   readonly id: string;
+  /** The *original* `NotificationEvent.notificationRequestId` this row
+   * defers — distinct from `id` (this row's own primary key). Preserved
+   * so `services/scheduler` can re-emit the same `notificationRequestId`
+   * the client was handed at `202 Accepted` time, instead of minting a
+   * new one; without it, a deferred (e.g. quiet-hours) notification's
+   * status would become permanently unqueryable via
+   * `GET /v1/notifications/:id` once re-emitted under a different id. */
+  readonly notificationRequestId: NotificationRequestId;
   readonly tenantId: TenantId;
   readonly recipientId: RecipientId;
   readonly notificationType: string;
@@ -23,6 +33,12 @@ export interface ScheduledNotificationProps {
   readonly templateVersionId: TemplateVersionId | null;
   readonly payload: Record<string, unknown>;
   readonly priority: Priority;
+  /** Preserved for the same reason as `notificationRequestId` above — a
+   * fanout-expanded recipient's event carries a `broadcastId`
+   * back-reference (see ADR 0011); if it's deferred by quiet hours, the
+   * re-emitted event must still carry it, or the back-reference is lost
+   * on every quiet-hours-deferred broadcast recipient. */
+  readonly broadcastId: BroadcastId | null;
   readonly dueAt: Date;
   /** Derived from `dueAt`, not independently settable — see
    * ADR 0011#poller-sharding: the poller shards its claim queries by this
@@ -50,6 +66,7 @@ export class ScheduledNotification {
 
   static schedule(props: {
     id: string;
+    notificationRequestId: NotificationRequestId;
     tenantId: TenantId;
     recipientId: RecipientId;
     notificationType: string;
@@ -57,12 +74,14 @@ export class ScheduledNotification {
     templateVersionId?: TemplateVersionId | null;
     payload: Record<string, unknown>;
     priority: Priority;
+    broadcastId?: BroadcastId | null;
     dueAt: Date;
   }): ScheduledNotification {
     return new ScheduledNotification({
       ...props,
       channel: props.channel ?? null,
       templateVersionId: props.templateVersionId ?? null,
+      broadcastId: props.broadcastId ?? null,
       dueMinute: minutesSinceEpoch(props.dueAt),
       status: "pending",
       claimedAt: null,
@@ -78,6 +97,10 @@ export class ScheduledNotification {
 
   get id(): string {
     return this.props.id;
+  }
+
+  get notificationRequestId(): NotificationRequestId {
+    return this.props.notificationRequestId;
   }
 
   get tenantId(): TenantId {
@@ -106,6 +129,10 @@ export class ScheduledNotification {
 
   get priority(): Priority {
     return this.props.priority;
+  }
+
+  get broadcastId(): BroadcastId | null {
+    return this.props.broadcastId;
   }
 
   get dueAt(): Date {

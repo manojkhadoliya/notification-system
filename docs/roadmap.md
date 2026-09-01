@@ -203,17 +203,41 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       known limitation: quiet hours are enforced in UTC, not a
       recipient's local time, since nothing in the domain model stores
       one yet
-- [ ] Dedupe claim (`DedupeRepository`), wired into every `worker-*`
+- [x] Dedupe claim (`DedupeRepository`), wired into every `worker-*`
       immediately before the gateway call — see
       [ADR 0010](adr/0010-delivery-reliability.md). The orchestration
       itself (`domain-notification`'s `DispatchService`) is already built
       and tested (above); `infra-postgres`'s `DedupeRepository` adapter
-      was already built too. `services/worker-sms`/`worker-push` (below)
-      prove the composition-root wiring pattern end to end; `-email`/
-      `-inapp` still need it replicated
-- [ ] `scheduled_notifications` table + `services/scheduler` (new) —
-      poller sharded by `(due_minute, bucket)`, jittered `due_at` from the
-      start — see [ADR 0011](adr/0011-scheduling-and-fanout.md)
+      was already built too. All four channel workers (`-sms`, `-push`,
+      `-email`, `-inapp`, below) wire it identically through
+      `DispatchService`
+- [x] `scheduled_notifications` table (already existed, built alongside
+      `services/router`'s quiet-hours deferral) + `services/scheduler`:
+      the poller half — `SchedulerService.pollOnce` claims due rows via
+      `SELECT ... FOR UPDATE SKIP LOCKED`, sharded by `(due_minute,
+      bucket)`, and re-emits each onto `events.{critical|standard|bulk}`
+      exactly as if it had just arrived — see
+      [ADR 0011](adr/0011-scheduling-and-fanout.md). No Kafka
+      consumer-group membership (it only ever produces); drives its own
+      poll loop on `SCHEDULER_POLL_INTERVAL_MS` instead. 14 unit tests.
+      **Two real gaps found and fixed while building this, not deferred:**
+      `ScheduledNotification` was dropping the *original*
+      `notificationRequestId` on defer (a poller re-emitting under the
+      row's own id would have made every quiet-hours-deferred request
+      permanently unqueryable via `GET /v1/notifications/:id` once
+      `services/projection-notification` exists) and dropping
+      `broadcastId` the same way (currently dormant — nothing produces a
+      non-null one yet, but the same bug, so fixed alongside rather than
+      rediscovered later). Also: `services/router`'s own README/this
+      one had already documented jitter on deferred `dueAt` as "built in
+      from the start," but nothing actually computed one — added a
+      `jitter` constructor seam to `RouterService` (up to 60s, forward
+      only) so that claim matches reality; see
+      [`services/scheduler/README.md`](../services/scheduler/README.md)
+      for the full writeup, including a documented, unresolved
+      limitation (a claimed-but-never-emitted row on a publish failure
+      has no automated reclaim path yet). **Not yet run against live
+      Postgres/Kafka** — see that README for `smoke-test.mjs`
 - [ ] `services/fanout-expander` (new) — audience descriptor → work-sized
       chunks (keyed by `chunkId`) → per-recipient events, Door 2 only —
       see [ADR 0011](adr/0011-scheduling-and-fanout.md)
@@ -359,6 +383,15 @@ they're additive rather than structural.
       [`services/inapp-gateway/README.md#known-phase-1-gap-no-connection-authentication`](../services/inapp-gateway/README.md#known-phase-1-gap-no-connection-authentication).
       Must be resolved before this service is reachable from anywhere
       other than a trusted internal network or a local dev box.
+- [ ] `services/scheduler` reclaim for a claimed-but-never-emitted row —
+      if `SchedulerService.pollOnce` fails to publish (or save) after
+      claiming a row, that row stays `status = 'claimed'` forever with no
+      automated path back to `'pending'`; `claimDue` only ever selects
+      `'pending'` rows. A real fix needs a "claimed longer than N minutes
+      ago" reclaim query in `ScheduledNotificationRepository` plus
+      operational visibility to notice a stuck row exists — neither
+      built yet. See
+      [`services/scheduler/README.md`](../services/scheduler/README.md).
 - [ ] Independent audit consumer group + analytics consumer group, off the
       delivery path, own offsets — see
       [`architecture/messaging.md`](architecture/messaging.md#future--audit-and-analytics-sinks-deferred).

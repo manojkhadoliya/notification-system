@@ -53,6 +53,17 @@ each is a real, deliberate call, not an oversight:
   suppressed `notificationRequestId` leaves no trace anywhere
   `GET /v1/notifications/:id` could ever surface. Revisit if there's a
   concrete need to tell a tenant *why* a recipient wasn't notified.
+- **A deferred `dueAt` gets up to 60s of forward-only jitter** (never
+  subtracted — a deferred send never fires before its computed time),
+  added here rather than in `domain-preferences`' `nextQuietHoursEnd`
+  (a pure "when does the window end" calculation with no reason to know
+  about poller-sharding concerns). Per
+  [ADR 0011](../../docs/adr/0011-scheduling-and-fanout.md): many
+  recipients sharing one quiet-hours policy's exact end minute would
+  otherwise all land on the same `due_minute`, which
+  `services/scheduler`'s `(due_minute, bucket)` sharding can't spread
+  out on its own. 60s isn't a number the ADR pins down — a judgment
+  call, see `MAX_DEFER_JITTER_MS`'s doc comment in `router-service.ts`.
 - **Quiet hours are evaluated against UTC, not the recipient's local
   time.** `domain-preferences`' own `quiet-hours.ts` doc comment says
   "the router resolves a recipient's timezone and passes an

@@ -1,6 +1,8 @@
 import { Prisma, type PrismaClient } from "./prisma-client.js";
 import type {
+  BroadcastId,
   Channel,
+  NotificationRequestId,
   Priority,
   RecipientId,
   TemplateVersionId,
@@ -17,6 +19,7 @@ import {
  * to match `schema.prisma`'s `scheduled_notifications` columns. */
 interface ScheduledNotificationRow {
   id: string;
+  notification_request_id: string;
   tenant_id: string;
   recipient_id: string;
   notification_type: string;
@@ -24,6 +27,7 @@ interface ScheduledNotificationRow {
   template_version_id: string | null;
   payload: unknown;
   priority: Priority;
+  broadcast_id: string | null;
   due_at: Date;
   due_minute: number;
   status: ScheduledNotificationStatus;
@@ -34,6 +38,7 @@ interface ScheduledNotificationRow {
 function rowToDomain(row: ScheduledNotificationRow): ScheduledNotification {
   return ScheduledNotification.reconstitute({
     id: row.id,
+    notificationRequestId: row.notification_request_id as NotificationRequestId,
     tenantId: row.tenant_id as TenantId,
     recipientId: row.recipient_id as RecipientId,
     notificationType: row.notification_type,
@@ -41,6 +46,7 @@ function rowToDomain(row: ScheduledNotificationRow): ScheduledNotification {
     templateVersionId: row.template_version_id as TemplateVersionId | null,
     payload: (row.payload ?? {}) as Record<string, unknown>,
     priority: row.priority,
+    broadcastId: row.broadcast_id as BroadcastId | null,
     dueAt: row.due_at,
     dueMinute: row.due_minute,
     status: row.status,
@@ -57,6 +63,7 @@ export class PostgresScheduledNotificationRepository implements ScheduledNotific
       where: { id: notification.id },
       create: {
         id: notification.id,
+        notificationRequestId: notification.notificationRequestId,
         tenantId: notification.tenantId,
         recipientId: notification.recipientId,
         notificationType: notification.notificationType,
@@ -64,6 +71,7 @@ export class PostgresScheduledNotificationRepository implements ScheduledNotific
         templateVersionId: notification.templateVersionId,
         payload: notification.payload as Prisma.InputJsonValue,
         priority: notification.priority,
+        broadcastId: notification.broadcastId,
         dueAt: notification.dueAt,
         dueMinute: notification.dueMinute,
         status: notification.status,

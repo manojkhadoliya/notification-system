@@ -117,7 +117,8 @@ permanently (see [`scaling-strategy.md`](scaling-strategy.md#storage-phasing))
 — it needs range queries on `due_at` that a log isn't built to answer.
 | field | type | notes |
 |---|---|---|
-| id | uuid | pk |
+| id | uuid | pk — this row's own identity, distinct from the field below |
+| notification_request_id | uuid | the *original* `NotificationEvent.notificationRequestId` this row defers; preserved so the poller re-emits under the same id the client was handed at `202 Accepted` time, not a new one — otherwise the deferred request becomes permanently unqueryable via `GET /v1/notifications/:id` once re-emitted |
 | tenant_id | uuid | id-reference |
 | recipient_id | uuid | id-reference |
 | notification_type | text | |
@@ -125,6 +126,7 @@ permanently (see [`scaling-strategy.md`](scaling-strategy.md#storage-phasing))
 | template_version_id | uuid nullable | |
 | payload | jsonb | template variables or raw content, carried through to the re-emitted event |
 | priority | enum | critical \| standard \| bulk |
+| broadcast_id | uuid nullable | the fanned-out event's `broadcastId` back-reference, if it had one — preserved for the same reason as `notification_request_id` above |
 | due_at | timestamptz | when the poller should re-emit this |
 | due_minute | int | derived from `due_at`, used to shard poller claims — see [ADR 0011](../adr/0011-scheduling-and-fanout.md) |
 | status | enum | pending \| claimed \| emitted |

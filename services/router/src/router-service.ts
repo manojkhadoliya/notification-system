@@ -23,6 +23,17 @@ function utcMinuteOfDay(date: Date): number {
   return date.getUTCHours() * 60 + date.getUTCMinutes();
 }
 
+/** Upper bound on the random jitter added to a deferred `dueAt` — see
+ * `defer()`'s doc comment and ADR 0011's "sharding and jitter from day
+ * one" rationale. 60s spreads a large cohort sharing one quiet-hours
+ * window's exact end minute (the common case: many recipients on the
+ * same policy) across enough distinct `due_minute` values that
+ * `services/scheduler`'s `(due_minute, bucket)` sharding actually has
+ * something to shard, without meaningfully delaying anyone — not a
+ * number ADR 0011 itself pins down, so this is a judgment call, not a
+ * spec'd constant. */
+const MAX_DEFER_JITTER_MS = 60_000;
+
 /**
  * The router's core orchestration — one call per consumed
  * `events.{critical|standard|bulk}` message, per messaging.md#router's
@@ -31,13 +42,18 @@ function utcMinuteOfDay(date: Date): number {
  * is only the I/O sequencing and side effects (publish, schedule).
  *
  * `now` is a constructor seam (defaults to `() => new Date()`) so
- * quiet-hours behavior is deterministic in tests — see
- * `router-service.test.ts`.
+ * quiet-hours behavior is deterministic in tests; `jitter` is a second
+ * seam (defaults to a random `[0, MAX_DEFER_JITTER_MS)` offset, added
+ * only in `defer()` — never subtracted, so a deferred send is always at
+ * or after its computed `dueAt`, never before) so that behavior is
+ * deterministic too — see `router-service.test.ts`.
  */
 export class RouterService {
   constructor(
     private readonly deps: RouterDependencies,
     private readonly now: () => Date = () => new Date(),
+    private readonly jitter: () => number = () =>
+      Math.floor(Math.random() * MAX_DEFER_JITTER_MS),
   ) {}
 
   async handle(event: NotificationEvent): Promise<void> {
@@ -169,6 +185,7 @@ export class RouterService {
   ): Promise<void> {
     const scheduled = ScheduledNotification.schedule({
       id: randomUUID(),
+      notificationRequestId: event.notificationRequestId,
       tenantId: event.tenantId,
       recipientId: event.recipientId,
       notificationType: event.notificationType,
@@ -176,7 +193,12 @@ export class RouterService {
       templateVersionId: event.templateVersionId,
       payload: event.payloadRef,
       priority: event.priority,
-      dueAt: decision.dueAt,
+      broadcastId: event.broadcastId,
+      // Jittered forward (never earlier — see MAX_DEFER_JITTER_MS's doc
+      // comment), so many recipients sharing one quiet-hours policy's
+      // exact end minute don't all land on the same due_minute for
+      // services/scheduler's poller shards to contend over.
+      dueAt: new Date(decision.dueAt.getTime() + this.jitter()),
     });
     await this.deps.scheduledNotificationRepository.save(scheduled);
   }
