@@ -136,6 +136,7 @@ export async function notificationRoutes(
         // spec grows one; see this package's README.
         priority: "standard",
         broadcastId: null,
+        idempotencyKey,
       };
       await deps.messageBroker.publishEvent(event);
       await deps.idempotencyStore.reserve(request.tenantId, idempotencyKey, {

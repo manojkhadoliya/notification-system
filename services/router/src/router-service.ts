@@ -147,6 +147,17 @@ export class RouterService {
       // null/optional variant for that state.
       attemptNumber: 0,
       occurredAt: now,
+      // Everything services/projection-notification needs to *create*
+      // the NotificationRequest row — this is the one place all of it is
+      // known at once (see DeliveryStatusEvent's own doc comment for
+      // why "accepted" carries this and sent/delivered/failed don't).
+      tenantId: event.tenantId,
+      recipientId: event.recipientId,
+      notificationType: event.notificationType,
+      idempotencyKey: event.idempotencyKey,
+      channel: decision.channel,
+      broadcastId: event.broadcastId,
+      payload: renderedPayload,
     });
   }
 

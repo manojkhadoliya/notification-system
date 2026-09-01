@@ -28,6 +28,7 @@ interface ScheduledNotificationRow {
   payload: unknown;
   priority: Priority;
   broadcast_id: string | null;
+  idempotency_key: string | null;
   due_at: Date;
   due_minute: number;
   status: ScheduledNotificationStatus;
@@ -47,6 +48,7 @@ function rowToDomain(row: ScheduledNotificationRow): ScheduledNotification {
     payload: (row.payload ?? {}) as Record<string, unknown>,
     priority: row.priority,
     broadcastId: row.broadcast_id as BroadcastId | null,
+    idempotencyKey: row.idempotency_key,
     dueAt: row.due_at,
     dueMinute: row.due_minute,
     status: row.status,
@@ -72,6 +74,7 @@ export class PostgresScheduledNotificationRepository implements ScheduledNotific
         payload: notification.payload as Prisma.InputJsonValue,
         priority: notification.priority,
         broadcastId: notification.broadcastId,
+        idempotencyKey: notification.idempotencyKey,
         dueAt: notification.dueAt,
         dueMinute: notification.dueMinute,
         status: notification.status,

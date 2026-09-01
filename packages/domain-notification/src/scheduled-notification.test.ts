@@ -95,6 +95,26 @@ test("preserves an explicit broadcastId for a deferred fanout recipient", () => 
   assert.equal(sn.broadcastId, "99999999-9999-9999-9999-999999999999");
 });
 
+test("idempotencyKey defaults to null", () => {
+  const sn = schedule(new Date());
+  assert.equal(sn.idempotencyKey, null);
+});
+
+test("preserves an explicit idempotencyKey from a Door-1-originated deferral", () => {
+  const sn = ScheduledNotification.schedule({
+    id: "sn1",
+    notificationRequestId,
+    tenantId,
+    recipientId,
+    notificationType: "digest",
+    payload: {},
+    priority: "standard",
+    idempotencyKey: "client-key-1",
+    dueAt: new Date(),
+  });
+  assert.equal(sn.idempotencyKey, "client-key-1");
+});
+
 test("dueMinute is derived from dueAt", () => {
   const dueAt = new Date("2026-01-01T00:00:00Z");
   const sn = schedule(dueAt);

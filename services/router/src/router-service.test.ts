@@ -38,6 +38,7 @@ function makeEvent(
     payloadRef: { message: "your order shipped" },
     priority: "standard",
     broadcastId: null,
+    idempotencyKey: "idempotency-key-1",
     ...overrides,
   };
 }
@@ -84,6 +85,19 @@ describe("RouterService.handle", () => {
     assert.equal(status.status, "accepted");
     assert.equal(status.attemptNumber, 0);
     assert.equal(status.notificationRequestId, event.notificationRequestId);
+    if (status.status !== "accepted") {
+      throw new Error("unreachable — asserted above");
+    }
+    // Everything services/projection-notification needs to create the
+    // NotificationRequest row — the resolved channel above all, since
+    // NotificationEvent.channel can be null but this can't be.
+    assert.equal(status.tenantId, event.tenantId);
+    assert.equal(status.recipientId, event.recipientId);
+    assert.equal(status.notificationType, event.notificationType);
+    assert.equal(status.idempotencyKey, event.idempotencyKey);
+    assert.equal(status.channel, "sms");
+    assert.equal(status.broadcastId, event.broadcastId);
+    assert.deepEqual(status.payload, command.renderedPayload);
   });
 
   it("falls back to JSON.stringify(payloadRef) when there's no .message and no template", async () => {
@@ -280,5 +294,10 @@ describe("RouterService.handle", () => {
     await service.handle(event);
 
     assert.equal(deps.messageBroker.publishedCommands[0]!.channel, "push");
+    // The auto-picked channel, not the (null) requested one, must be
+    // what the "accepted" event carries — this is the only place it's
+    // recorded for services/projection-notification.
+    const status = deps.messageBroker.deliveryStatusEvents[0]!;
+    assert.equal(status.status === "accepted" && status.channel, "push");
   });
 });

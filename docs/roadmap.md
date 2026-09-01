@@ -267,10 +267,39 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       dedicated "a redelivery reproduces the same ids" tests. **Not yet
       run against live Postgres/Kafka** — see that README for
       `smoke-test.mjs`
-- [ ] `services/projection-notification`: single writer of
-      `NotificationRequest.status`, consuming `events.*` (accepted) +
-      `delivery-status` (sent/delivered/failed), ordered state machine —
-      see [ADR 0010](adr/0010-delivery-reliability.md#single-writer-status)
+- [x] `services/projection-notification`: single writer of
+      `NotificationRequest.status`, ordered state machine — see
+      [ADR 0010](adr/0010-delivery-reliability.md#single-writer-status).
+      Consumes **only** `delivery-status`, not `events.*` + `delivery-status`
+      as earlier docs (this item included) described — the router
+      publishes `accepted` onto `delivery-status` itself, same topic and
+      key as every other transition, which is what actually gives the
+      single-writer ordering claim a real per-partition guarantee to
+      stand on (`messaging.md`'s "Delivery status has one writer"
+      section corrected in this PR). **A real, structural gap surfaced
+      and fixed, not deferred:** `DeliveryStatusEvent` had no way to
+      carry what `NotificationRequest.accept()` actually needs to
+      construct a row (resolved `channel`, rendered `payload`,
+      `tenantId`, `recipientId`, `notificationType`, `broadcastId`,
+      `idempotencyKey`) — this service could not have been built against
+      it as it stood. Turned `DeliveryStatusEvent` into a discriminated
+      union: `"accepted"` (which *creates* the row) carries all of that,
+      since the router is the one place it's all known at once;
+      `"sent"`/`"delivered"`/`"failed"` (which only *advance* an existing
+      row) stay exactly as minimal as before. Also added
+      `NotificationEvent.idempotencyKey` (never threaded past ingest
+      before this — `null` for anything Door 2 originated) and threaded
+      it through `ScheduledNotification`/`services/scheduler`'s
+      re-emission path, the same "preserve across a defer/re-emit hop"
+      fix already applied to `notificationRequestId`/`broadcastId`
+      there. `idempotencyKey` is now nullable on
+      `NotificationRequest`/the Postgres schema too. 11 unit tests,
+      covering row creation, redelivery idempotency, the full
+      `accepted -> sent -> delivered` chain, and both the
+      no-existing-row and regressive-transition defensive paths. **Not
+      yet run against live Postgres/Kafka** — see
+      [`services/projection-notification/README.md`](../services/projection-notification/README.md)
+      for `smoke-test.mjs`
 - [x] `services/worker-sms`: consumes `command.sms` + all three retry
       tiers (one process, not per tier — see
       [ADR 0010](adr/0010-delivery-reliability.md)). `WorkerService` is
@@ -362,8 +391,9 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       short-lived recipient token, or an authenticating edge/BFF in
       front of it) — tracked here as a separate future item, not
       invented unscoped inside this PR
-- [ ] Template rendering (Handlebars) wired into the router for
-      template-driven requests
+- [x] Template rendering (Handlebars) wired into the router for
+      template-driven requests — `render-template.ts`, part of
+      `services/router`'s original PR
 - [ ] Unit tests: domain services (✅ done for all four `domain-*`
       packages, above — 53 tests via `node:test`, `pnpm test`), adapters
       (not yet — no adapters exist yet)

@@ -13,7 +13,11 @@ export interface NotificationRequestProps {
   readonly tenantId: TenantId;
   readonly recipientId: RecipientId;
   readonly notificationType: string;
-  readonly idempotencyKey: string;
+  /** `null` for a Door-2-originated request (an internal service, or a
+   * `services/fanout-expander`-expanded broadcast recipient) — there is
+   * no `Idempotency-Key` concept outside Door 1. See
+   * `NotificationEvent.idempotencyKey`'s doc comment. */
+  readonly idempotencyKey: string | null;
   readonly channel: Channel;
   readonly broadcastId: BroadcastId | null;
   /** Rendered content, as published on `command.*` — see
@@ -44,7 +48,7 @@ export class NotificationRequest {
     tenantId: TenantId;
     recipientId: RecipientId;
     notificationType: string;
-    idempotencyKey: string;
+    idempotencyKey: string | null;
     channel: Channel;
     broadcastId?: BroadcastId | null;
     payload: Record<string, unknown>;
@@ -77,7 +81,7 @@ export class NotificationRequest {
     return this.props.notificationType;
   }
 
-  get idempotencyKey(): string {
+  get idempotencyKey(): string | null {
     return this.props.idempotencyKey;
   }
 

@@ -1,7 +1,6 @@
 import type {
   BroadcastId,
   Channel,
-  DeliveryStatus,
   NotificationRequestId,
   Priority,
   RecipientId,
@@ -33,18 +32,56 @@ export interface NotificationEvent {
   readonly payloadRef: Record<string, unknown>;
   readonly priority: Priority;
   readonly broadcastId: BroadcastId | null;
+  /** Door 1's `Idempotency-Key` header, carried through for
+   * `NotificationRequest.idempotencyKey` (data-model.md: stored for
+   * record-keeping — the actual dedup already happened at ingest, via
+   * `IdempotencyStore`, before this event was ever produced). `null` for
+   * anything Door 2 originates (internal services, and
+   * `services/fanout-expander`'s per-recipient expansion) — there is no
+   * `Idempotency-Key` concept for an internally-originated fact; see
+   * `messaging.md#two-doors-onto-one-backbone`. */
+  readonly idempotencyKey: string | null;
 }
 
 /** Published to `delivery-status`, consumed only by
  * `services/projection-notification` — see
  * messaging.md#delivery-status-has-one-writer and
- * ADR 0010#single-writer-status. */
-export interface DeliveryStatusEvent {
-  readonly notificationRequestId: NotificationRequestId;
-  readonly status: DeliveryStatus;
-  readonly attemptNumber: number;
-  readonly occurredAt: Date;
-}
+ * ADR 0010#single-writer-status. A discriminated union, not one flat
+ * shape: `"accepted"` is the fact that *creates*
+ * `services/projection-notification`'s `NotificationRequest` row (the
+ * router is the only place that has every field the row needs — resolved
+ * `channel`, rendered `payload` — all at once, right when it publishes
+ * this), so it carries everything `NotificationRequest.accept()` needs.
+ * `"sent"`/`"delivered"`/`"failed"` only ever *advance* a row that
+ * already exists, so they carry nothing beyond which request and which
+ * attempt. */
+export type DeliveryStatusEvent =
+  | {
+      readonly notificationRequestId: NotificationRequestId;
+      readonly status: "accepted";
+      readonly attemptNumber: number;
+      readonly occurredAt: Date;
+      readonly tenantId: TenantId;
+      readonly recipientId: RecipientId;
+      readonly notificationType: string;
+      readonly idempotencyKey: string | null;
+      /** The router's *resolved* channel — never null here, unlike
+       * `NotificationEvent.channel`: by the time "accepted" is
+       * published, routing has already happened. */
+      readonly channel: Channel;
+      readonly broadcastId: BroadcastId | null;
+      /** The *rendered* payload, as published on `command.*` — see
+       * `data-model.md`'s `NotificationRequest.payload` and
+       * messaging.md#self-contained-command-payload. Not the same value
+       * as `NotificationEvent.payloadRef`. */
+      readonly payload: Record<string, unknown>;
+    }
+  | {
+      readonly notificationRequestId: NotificationRequestId;
+      readonly status: "sent" | "delivered" | "failed";
+      readonly attemptNumber: number;
+      readonly occurredAt: Date;
+    };
 
 /**
  * Publish an event/command for async dispatch — the router and workers

@@ -80,7 +80,7 @@ reconcile.
 | tenant_id | uuid | id-reference |
 | recipient_id | uuid | id-reference |
 | notification_type | text | what the router checks preferences/fallback against |
-| idempotency_key | text | ingest-time dedup happens earlier, via `IdempotencyStore` (Redis), before this row is projected |
+| idempotency_key | text nullable | ingest-time dedup happens earlier, via `IdempotencyStore` (Redis), before this row is projected; null for a Door-2-originated request (internal services, `services/fanout-expander`-expanded broadcast recipients) — there's no `Idempotency-Key` concept outside Door 1 |
 | channel | enum | resolved channel (router's decision, or the caller's honored override) |
 | broadcast_id | uuid nullable | id-reference back to the originating `BroadcastRequest`, set only for fan-out-expanded requests |
 | payload | jsonb-equivalent | rendered content, as published on `command.*` — see [`messaging.md`](messaging.md#self-contained-command-payload) |
@@ -127,6 +127,7 @@ permanently (see [`scaling-strategy.md`](scaling-strategy.md#storage-phasing))
 | payload | jsonb | template variables or raw content, carried through to the re-emitted event |
 | priority | enum | critical \| standard \| bulk |
 | broadcast_id | uuid nullable | the fanned-out event's `broadcastId` back-reference, if it had one — preserved for the same reason as `notification_request_id` above |
+| idempotency_key | text nullable | the original event's `Idempotency-Key`, if it had one — preserved for the same reason as `notification_request_id` above |
 | due_at | timestamptz | when the poller should re-emit this |
 | due_minute | int | derived from `due_at`, used to shard poller claims — see [ADR 0011](../adr/0011-scheduling-and-fanout.md) |
 | status | enum | pending \| claimed \| emitted |
