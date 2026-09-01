@@ -17,7 +17,10 @@ Local infrastructure definitions.
 `fanout-expander`, `worker-sms`, `worker-push`, `worker-email`,
 `worker-inapp`, `inapp-gateway`, `projection-notification`) are added to
 this file once each has a Dockerfile and a real entrypoint — Phase 1, not
-before.
+before. Every entrypoint now exists (all ten composition roots are
+built); no Dockerfile does yet — see
+[`../docs/local-development.md`](../docs/local-development.md) for the
+plan to close that gap and actually run the full stack locally.
 
 ## Usage
 
