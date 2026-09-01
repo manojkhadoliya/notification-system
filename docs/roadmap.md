@@ -38,14 +38,16 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       — see [`architecture/messaging.md`](architecture/messaging.md#topic-layout)
       and [`../infra/kafka/create-topics.sh`](../infra/kafka/create-topics.sh).
       **Not yet run**, same caveat as above
-- [ ] Internal producer library (Door 2) — same normalized event shape as
+- [x] Internal producer library (Door 2) — same normalized event shape as
       Door 1's intent, no HTTP hop — see
       [`architecture/messaging.md`](architecture/messaging.md#two-doors-onto-one-backbone).
-      Deliberately **not** scaffolded as its own package: it's a thin
-      wrapper around `domain-notification`'s `MessageBroker` port and the
-      normalized-event-shape type, both Phase 1 deliverables (see
-      `packages/shared-kernel`'s and `packages/domain-notification`'s
-      READMEs) — there's nothing for it to wrap yet
+      Confirmed, building `services/fanout-expander`, to need no separate
+      package: it's exactly a direct `MessageBroker.publishBroadcast(...)`
+      call — `services/fanout-expander/scripts/smoke-test.mjs` is the
+      concrete example (an "internal service" publishing a
+      `BroadcastRequest` straight through `KafkaMessageBroker`, no HTTP
+      hop). `publishBroadcast`/`publishChunk` (the two methods that make
+      that real) were added to `MessageBroker` in that same PR
 - [x] `packages/observability` — shared OpenTelemetry bootstrap
       (`startTracing`), exporting traces via OTLP/HTTP to the `jaeger`
       compose container. Brought forward from the Phase 1
@@ -238,9 +240,33 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       limitation (a claimed-but-never-emitted row on a publish failure
       has no automated reclaim path yet). **Not yet run against live
       Postgres/Kafka** — see that README for `smoke-test.mjs`
-- [ ] `services/fanout-expander` (new) — audience descriptor → work-sized
-      chunks (keyed by `chunkId`) → per-recipient events, Door 2 only —
-      see [ADR 0011](adr/0011-scheduling-and-fanout.md)
+- [x] `services/fanout-expander`: audience descriptor → work-sized chunks
+      (keyed by `chunkId`) → per-recipient events, Door 2 only — see
+      [ADR 0011](adr/0011-scheduling-and-fanout.md). `MessageBroker`
+      gained `publishBroadcast`/`publishChunk` (didn't exist — every
+      other channel worker/router/scheduler's fakes needed the two new
+      stub methods too); `domain-preferences`' `PreferenceRepository`
+      gained `findRecipientIdsByTenant`, since nothing anywhere could
+      resolve "every recipient for a tenant" before this. Phase 1's only
+      supported `audienceDescriptor` shape is `{ "kind": "all_recipients"
+      }` — no segmentation/tagging model exists yet, a deliberate
+      minimal choice, not an oversight (see the package's README). Every
+      id this service mints (`chunkId`, a fanned-out recipient's
+      `notificationRequestId`) is deterministic, not
+      `crypto.randomUUID()` — derived from stable inputs so a Kafka
+      redelivery of either `events.broadcast`/`events.broadcast.chunks`
+      reproduces identical ids and the existing per-worker dedupe claim
+      (ADR 0010) catches the redelivery instead of double-sending; see
+      `services/fanout-expander/README.md#redelivery-safety-by-construction`
+      for the one case that doesn't cover (the tenant's recipient set
+      actually changing between an original attempt and a redelivery).
+      Also resolves the Phase 0 "internal producer library (Door 2)"
+      item below — it needed no separate package, just
+      `publishBroadcast` plus a direct `KafkaMessageBroker` call, which
+      `scripts/smoke-test.mjs` demonstrates. 20 unit tests, including
+      dedicated "a redelivery reproduces the same ids" tests. **Not yet
+      run against live Postgres/Kafka** — see that README for
+      `smoke-test.mjs`
 - [ ] `services/projection-notification`: single writer of
       `NotificationRequest.status`, consuming `events.*` (accepted) +
       `delivery-status` (sent/delivered/failed), ordered state machine —

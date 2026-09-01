@@ -79,6 +79,20 @@ export class PostgresPreferenceRepository implements PreferenceRepository {
     });
   }
 
+  async findRecipientIdsByTenant(tenantId: TenantId): Promise<RecipientId[]> {
+    // Ordered, not just filtered: services/fanout-expander derives
+    // deterministic chunk/notificationRequestId ids from a chunk's
+    // position + recipient, so a Kafka redelivery re-resolving this same
+    // audience must see the same order to stay redelivery-safe — see
+    // FanoutExpanderService's doc comment.
+    const rows = await this.prisma.recipient.findMany({
+      where: { tenantId },
+      select: { id: true },
+      orderBy: { id: "asc" },
+    });
+    return rows.map((row) => RecipientId(row.id));
+  }
+
   async findPreferences(
     recipientId: RecipientId,
     notificationType: string,

@@ -79,6 +79,14 @@ export class FakeMessageBroker implements MessageBroker {
   async publishDeliveryStatus(event: DeliveryStatusEvent): Promise<void> {
     this.deliveryStatusEvents.push(event);
   }
+
+  async publishBroadcast(): Promise<void> {
+    // Not exercised by services/worker-push — that's services/fanout-expander's job.
+  }
+
+  async publishChunk(): Promise<void> {
+    // Not exercised by services/worker-push — see publishBroadcast's comment above.
+  }
 }
 
 export class FakeNotificationRepository implements NotificationRepository {

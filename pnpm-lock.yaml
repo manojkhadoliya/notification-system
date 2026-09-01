@@ -203,12 +203,21 @@ importers:
       '@notification-system/domain-notification':
         specifier: workspace:*
         version: link:../../packages/domain-notification
+      '@notification-system/domain-preferences':
+        specifier: workspace:*
+        version: link:../../packages/domain-preferences
       '@notification-system/infra-kafka':
         specifier: workspace:*
         version: link:../../packages/infra-kafka
+      '@notification-system/infra-postgres':
+        specifier: workspace:*
+        version: link:../../packages/infra-postgres
       '@notification-system/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@notification-system/shared-kernel':
+        specifier: workspace:*
+        version: link:../../packages/shared-kernel
 
   services/inapp-gateway:
     dependencies:

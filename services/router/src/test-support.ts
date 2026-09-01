@@ -26,6 +26,7 @@ import type {
   Channel,
   RecipientId,
   TemplateVersionId,
+  TenantId,
 } from "@notification-system/shared-kernel";
 
 export class FakePreferenceRepository implements PreferenceRepository {
@@ -46,6 +47,14 @@ export class FakePreferenceRepository implements PreferenceRepository {
 
   async saveRecipient(recipient: Recipient): Promise<void> {
     this.recipients.set(recipient.id, recipient);
+  }
+
+  async findRecipientIdsByTenant(tenantId: TenantId): Promise<RecipientId[]> {
+    // Not exercised by services/router — that's services/fanout-expander's
+    // job — but trivial to implement for real from what's already seeded.
+    return [...this.recipients.values()]
+      .filter((r) => r.tenantId === tenantId)
+      .map((r) => r.id);
   }
 
   async findPreferences(
@@ -159,5 +168,13 @@ export class FakeMessageBroker implements MessageBroker {
 
   async publishDeliveryStatus(event: DeliveryStatusEvent): Promise<void> {
     this.deliveryStatusEvents.push(event);
+  }
+
+  async publishBroadcast(): Promise<void> {
+    // Not exercised by services/router — that's services/fanout-expander's job.
+  }
+
+  async publishChunk(): Promise<void> {
+    // Not exercised by services/router — see publishBroadcast's comment above.
   }
 }

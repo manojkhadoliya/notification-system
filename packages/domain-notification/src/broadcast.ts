@@ -49,3 +49,56 @@ export function assertValidChunkSize(
     );
   }
 }
+
+/**
+ * Splits a resolved audience into `Chunk`s of at most
+ * `MAX_RECIPIENTS_PER_CHUNK` — the pure half of
+ * `services/fanout-expander`'s stage 1 (see
+ * messaging.md#fan-out--one-event-many-recipients). `makeChunkId` is a
+ * constructor seam (rather than this function calling `randomUUID()`
+ * itself) so chunk ids are deterministic in tests, same pattern as
+ * `RouterService`'s `now`/`jitter` seams.
+ *
+ * An empty `recipientIds` produces zero chunks, not an error — an
+ * audience descriptor that resolves to nobody is a legitimate (if
+ * unusual) outcome, not a caller mistake `assertValidChunkSize` should
+ * reject.
+ */
+export function splitIntoChunks(
+  broadcastId: BroadcastId,
+  recipientIds: readonly RecipientId[],
+  makeChunkId: () => ChunkId,
+): Chunk[] {
+  const chunks: Chunk[] = [];
+  for (let i = 0; i < recipientIds.length; i += MAX_RECIPIENTS_PER_CHUNK) {
+    const slice = recipientIds.slice(i, i + MAX_RECIPIENTS_PER_CHUNK);
+    chunks.push({ id: makeChunkId(), broadcastId, recipientIds: slice });
+  }
+  return chunks;
+}
+
+/**
+ * What's actually published on `events.broadcast.chunks` — a `Chunk`
+ * (this chunk's own identity + its recipients) combined with everything
+ * from the originating `BroadcastRequest` that `services/fanout-expander`'s
+ * stage 2 needs to expand each recipient into a full `NotificationEvent`,
+ * without a second lookup back to the original request. Same
+ * self-contained-payload principle
+ * messaging.md#self-contained-command-payload applies to `command.*` —
+ * carrying the context forward once, rather than re-deriving or
+ * re-fetching it downstream.
+ *
+ * Deliberately has no `channel`/`templateVersionId` fields:
+ * `BroadcastRequest` doesn't carry either (see its own doc comment) — a
+ * broadcast always auto-picks a channel per recipient and never renders
+ * a template, a real Phase 1 limitation, not an oversight here.
+ */
+export interface BroadcastChunk {
+  readonly chunkId: ChunkId;
+  readonly broadcastId: BroadcastId;
+  readonly recipientIds: readonly RecipientId[];
+  readonly tenantId: TenantId;
+  readonly notificationType: string;
+  readonly payload: Record<string, unknown>;
+  readonly priority: Priority;
+}

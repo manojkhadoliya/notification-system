@@ -7,7 +7,16 @@
   "include": ["src"],
   "references": [
     {
+      "path": "../../packages/shared-kernel"
+    },
+    {
       "path": "../../packages/domain-notification"
+    },
+    {
+      "path": "../../packages/domain-preferences"
+    },
+    {
+      "path": "../../packages/infra-postgres"
     },
     {
       "path": "../../packages/infra-kafka"

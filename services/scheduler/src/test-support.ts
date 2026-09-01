@@ -80,4 +80,12 @@ export class FakeMessageBroker implements MessageBroker {
   async publishDeliveryStatus(): Promise<void> {
     // Not exercised by services/scheduler — that's services/router's job.
   }
+
+  async publishBroadcast(): Promise<void> {
+    // Not exercised by services/scheduler — that's services/fanout-expander's job.
+  }
+
+  async publishChunk(): Promise<void> {
+    // Not exercised by services/scheduler — see publishBroadcast's comment above.
+  }
 }

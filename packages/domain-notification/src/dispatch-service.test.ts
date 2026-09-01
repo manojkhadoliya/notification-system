@@ -64,6 +64,14 @@ class FakeMessageBroker implements MessageBroker {
   async publishDeliveryStatus(event: DeliveryStatusEvent): Promise<void> {
     this.deliveryStatusEvents.push(event);
   }
+
+  async publishBroadcast(): Promise<void> {
+    // Not exercised by DispatchService — that's services/fanout-expander's job.
+  }
+
+  async publishChunk(): Promise<void> {
+    // Not exercised by DispatchService — see publishBroadcast's comment above.
+  }
 }
 
 class FakeSmsGateway implements SmsGateway {
