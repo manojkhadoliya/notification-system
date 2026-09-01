@@ -4,15 +4,24 @@ import type { AddressInfo } from "node:net";
 import { after, before, describe, it } from "node:test";
 import { WebSocket } from "ws";
 import { RecipientId } from "@notification-system/shared-kernel";
-import { buildServer, FEED_STREAM_PATH, type InappGatewayServer } from "./server.js";
+import {
+  buildServer,
+  FEED_STREAM_PATH,
+  type InappGatewayServer,
+} from "./server.js";
 
 /** Real loopback HTTP + WebSocket server on an ephemeral port — this is
  * the standard way to test a `ws` server (there's no Fastify-style
  * `.inject()` for raw upgrades), and it never touches Docker/external
  * infra: everything here is in-process, localhost-only. */
-async function start(): Promise<{ gateway: InappGatewayServer; wsUrl: (recipientId?: string) => string }> {
+async function start(): Promise<{
+  gateway: InappGatewayServer;
+  wsUrl: (recipientId?: string) => string;
+}> {
   const gateway = buildServer();
-  await new Promise<void>((resolve) => gateway.httpServer.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve) =>
+    gateway.httpServer.listen(0, "127.0.0.1", resolve),
+  );
   const { port } = gateway.httpServer.address() as AddressInfo;
   return {
     gateway,
@@ -21,14 +30,22 @@ async function start(): Promise<{ gateway: InappGatewayServer; wsUrl: (recipient
   };
 }
 
-function waitFor(socket: WebSocket, event: "open" | "close" | "message"): Promise<[unknown, unknown]> {
+function waitFor(
+  socket: WebSocket,
+  event: "open" | "close" | "message",
+): Promise<[unknown, unknown]> {
   return new Promise((resolve) => {
-    socket.once(event, (...args: unknown[]) => resolve(args as [unknown, unknown]));
+    socket.once(event, (...args: unknown[]) =>
+      resolve(args as [unknown, unknown]),
+    );
   });
 }
 
 describe("inapp-gateway server", () => {
-  let harness: { gateway: InappGatewayServer; wsUrl: (recipientId?: string) => string };
+  let harness: {
+    gateway: InappGatewayServer;
+    wsUrl: (recipientId?: string) => string;
+  };
 
   before(async () => {
     harness = await start();
@@ -43,7 +60,10 @@ describe("inapp-gateway server", () => {
     const socket = new WebSocket(harness.wsUrl(recipientId));
     await waitFor(socket, "open");
 
-    harness.gateway.registry.push(RecipientId(recipientId), JSON.stringify({ hello: "world" }));
+    harness.gateway.registry.push(
+      RecipientId(recipientId),
+      JSON.stringify({ hello: "world" }),
+    );
     const [data] = await waitFor(socket, "message");
 
     assert.deepEqual(JSON.parse(String(data)), { hello: "world" });

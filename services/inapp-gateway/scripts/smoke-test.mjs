@@ -22,7 +22,10 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { WebSocket } from "ws";
-import { createRedis, INAPP_PUBSUB_CHANNEL } from "@notification-system/infra-redis";
+import {
+  createRedis,
+  INAPP_PUBSUB_CHANNEL,
+} from "@notification-system/infra-redis";
 
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
 const HOST = process.env.SMOKE_TEST_HOST ?? "127.0.0.1";

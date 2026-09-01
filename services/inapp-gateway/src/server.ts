@@ -44,12 +44,17 @@ export function buildServer(
   const registry = options.registry ?? new ConnectionRegistry();
 
   const httpServer = createServer((_req, res) => {
-    res.writeHead(404, { "content-type": "application/json" }).end(
-      JSON.stringify({ error: { code: "not_found", message: "not found" } }),
-    );
+    res
+      .writeHead(404, { "content-type": "application/json" })
+      .end(
+        JSON.stringify({ error: { code: "not_found", message: "not found" } }),
+      );
   });
 
-  const wss = new WebSocketServer({ server: httpServer, path: FEED_STREAM_PATH });
+  const wss = new WebSocketServer({
+    server: httpServer,
+    path: FEED_STREAM_PATH,
+  });
 
   wss.on("connection", (socket: WebSocket, request) => {
     const recipientId = parseRecipientId(request.url);
@@ -68,7 +73,8 @@ export function buildServer(
     httpServer,
     registry,
     async close() {
-      for (const socket of wss.clients) socket.close(1001, "server shutting down");
+      for (const socket of wss.clients)
+        socket.close(1001, "server shutting down");
       await new Promise<void>((resolve, reject) => {
         wss.close((err) => (err ? reject(err) : resolve()));
       });

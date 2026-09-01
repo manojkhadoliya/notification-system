@@ -56,7 +56,10 @@ test("never reaches a socket held for a different recipient", () => {
   const other = fakeSocket();
   registry.add(RecipientId("someone-else"), other);
 
-  pushToRegistry(registry, sampleNotification({ recipientId: RecipientId("recipient-1") }));
+  pushToRegistry(
+    registry,
+    sampleNotification({ recipientId: RecipientId("recipient-1") }),
+  );
 
   assert.deepEqual(other.sent, []);
 });

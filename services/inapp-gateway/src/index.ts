@@ -22,9 +22,8 @@ async function main(): Promise<void> {
   const { startTracing } = await import("@notification-system/observability");
   startTracing({ serviceName: "inapp-gateway" });
 
-  const { createRedis, InAppSubscriber } = await import(
-    "@notification-system/infra-redis"
-  );
+  const { createRedis, InAppSubscriber } =
+    await import("@notification-system/infra-redis");
 
   // A dedicated connection, per infra-redis's own README: once an ioredis
   // connection issues SUBSCRIBE it can't run any other command, unlike
