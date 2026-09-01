@@ -174,8 +174,10 @@ model NotificationRequest {
   recipientId      String         @map("recipient_id") @db.Uuid
   notificationType String         @map("notification_type")
   // Ingest-time dedup happens earlier, via IdempotencyStore (Redis) — see
-  // data-model.md. Not unique here for that reason.
-  idempotencyKey   String         @map("idempotency_key")
+  // data-model.md. Not unique here for that reason. Nullable: null for
+  // anything Door 2 originated (no Idempotency-Key concept outside
+  // Door 1) — see NotificationEvent.idempotencyKey's doc comment.
+  idempotencyKey   String?        @map("idempotency_key")
   channel          Channel
   broadcastId      String?        @map("broadcast_id") @db.Uuid
   payload          Json
@@ -247,6 +249,9 @@ model ScheduledNotification {
   // Same preserve-across-defer reasoning as notificationRequestId above —
   // a fanout-expanded recipient's broadcastId back-reference, if present.
   broadcastId           String?                     @map("broadcast_id") @db.Uuid
+  // Same preserve-across-defer reasoning again — the original event's
+  // Idempotency-Key, null for anything Door 2 originated.
+  idempotencyKey        String?                     @map("idempotency_key")
   dueAt                 DateTime                    @map("due_at") @db.Timestamptz(6)
   // Derived from dueAt at write time — see ADR 0011#poller-sharding. Not
   // recomputed by Postgres (no generated column): the domain layer derives

@@ -23,6 +23,19 @@ test("a newly accepted request starts at status accepted", () => {
   assert.equal(accept().status, "accepted");
 });
 
+test("idempotencyKey may be null — a Door-2-originated request has none", () => {
+  const req = NotificationRequest.accept({
+    id: NotificationRequestId("88888888-8888-8888-8888-888888888888"),
+    tenantId: TenantId("99999999-9999-9999-9999-999999999999"),
+    recipientId: RecipientId("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+    notificationType: "billing",
+    idempotencyKey: null,
+    channel: "email",
+    payload: {},
+  });
+  assert.equal(req.idempotencyKey, null);
+});
+
 test("accepted -> sent -> delivered is a valid chain", () => {
   const sent = accept().advanceStatus("sent");
   assert.notEqual(sent, null);

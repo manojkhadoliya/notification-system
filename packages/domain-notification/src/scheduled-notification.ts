@@ -39,6 +39,13 @@ export interface ScheduledNotificationProps {
    * re-emitted event must still carry it, or the back-reference is lost
    * on every quiet-hours-deferred broadcast recipient. */
   readonly broadcastId: BroadcastId | null;
+  /** Same preserve-across-defer reasoning as `notificationRequestId`/
+   * `broadcastId` above — the original `NotificationEvent.idempotencyKey`
+   * (`null` for anything Door 2 originated), carried through so the
+   * re-emitted event's `idempotencyKey` matches what the original event
+   * carried, for `NotificationRequest.idempotencyKey`'s sake once
+   * `services/projection-notification` creates the row. */
+  readonly idempotencyKey: string | null;
   readonly dueAt: Date;
   /** Derived from `dueAt`, not independently settable — see
    * ADR 0011#poller-sharding: the poller shards its claim queries by this
@@ -75,6 +82,7 @@ export class ScheduledNotification {
     payload: Record<string, unknown>;
     priority: Priority;
     broadcastId?: BroadcastId | null;
+    idempotencyKey?: string | null;
     dueAt: Date;
   }): ScheduledNotification {
     return new ScheduledNotification({
@@ -82,6 +90,7 @@ export class ScheduledNotification {
       channel: props.channel ?? null,
       templateVersionId: props.templateVersionId ?? null,
       broadcastId: props.broadcastId ?? null,
+      idempotencyKey: props.idempotencyKey ?? null,
       dueMinute: minutesSinceEpoch(props.dueAt),
       status: "pending",
       claimedAt: null,
@@ -133,6 +142,10 @@ export class ScheduledNotification {
 
   get broadcastId(): BroadcastId | null {
     return this.props.broadcastId;
+  }
+
+  get idempotencyKey(): string | null {
+    return this.props.idempotencyKey;
   }
 
   get dueAt(): Date {

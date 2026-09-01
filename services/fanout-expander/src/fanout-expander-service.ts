@@ -143,6 +143,9 @@ export class FanoutExpanderService {
         payloadRef: chunk.payload,
         priority: chunk.priority,
         broadcastId: chunk.broadcastId,
+        // No Idempotency-Key concept outside Door 1 — see
+        // NotificationEvent.idempotencyKey's doc comment.
+        idempotencyKey: null,
       });
     }
   }

@@ -264,18 +264,36 @@ no longer triggers a dispatch-path rebalance. See
 ## Delivery status has one writer
 
 `services/projection-notification` is the **single writer** of
-`NotificationRequest.status`. It consumes both `events.*` (for the
-`accepted` transition, published by the router) and `delivery-status` (for
-`sent`/`delivered`/`failed`, published by channel workers), and applies an
-ordered state machine — `accepted → sent → delivered`, never backwards —
-rather than a plain upsert. This replaces the earlier design, where the
-projection wrote `accepted` from one consumer group and workers wrote
-`sent`/`delivered` from another with no ordering between them: Cassandra
-resolves same-cell writes last-write-wins by timestamp, so a lagging
-`accepted` write could land after a `delivered` write and regress the row.
-"Idempotent upsert" guards against duplicates; it doesn't guard against
-going backwards, and only the ordered state machine does. See
+`NotificationRequest.status`. It consumes **only** `delivery-status` —
+the router publishes `accepted` onto that same topic (not `events.*`),
+with the same `DeliveryStatusEvent` shape and the same
+`notificationRequestId` key every `sent`/`delivered`/`failed` transition
+uses, so every transition for one request shares a single Kafka
+partition and gets Kafka's real per-partition ordering guarantee for
+free. (An earlier draft of this doc had the router publish `accepted`
+onto `events.*` instead; that was never what got built, and consuming
+two source topics would need `services/router` and every channel worker
+to agree on `notificationRequestId`-consistent partitioning *across*
+topics just to approximate what one topic already gives outright — see
+`services/projection-notification/README.md` for the fuller writeup.)
+`services/projection-notification` applies an ordered state machine —
+`accepted → sent → delivered`, never backwards — rather than a plain
+upsert. This replaces the earlier design, where the projection wrote
+`accepted` from one consumer group and workers wrote `sent`/`delivered`
+from another with no ordering between them: Cassandra resolves same-cell
+writes last-write-wins by timestamp, so a lagging `accepted` write could
+land after a `delivered` write and regress the row. "Idempotent upsert"
+guards against duplicates; it doesn't guard against going backwards, and
+only the ordered state machine does. See
 [ADR 0010](../adr/0010-delivery-reliability.md).
+
+Because `accepted` is the fact that *creates* the row (not just advances
+one that already exists), it carries everything `NotificationRequest`
+needs to be constructed — the router's *resolved* `channel`, the
+*rendered* `payload`, `idempotencyKey`, `broadcastId` — while
+`sent`/`delivered`/`failed` stay minimal (just which request, which
+attempt, when). See `DeliveryStatusEvent`'s doc comment in
+`domain-notification/src/ports.ts`.
 
 This projection is a read model only — nothing on the delivery path reads
 from it or waits on it. `GET /v1/notifications/:id` is its only consumer.
@@ -293,7 +311,8 @@ from it or waits on it. `GET /v1/notifications/:id` is its only consumer.
   "templateVersionId": "uuid (optional)",
   "payloadRef": { "vars": { "...": "..." } },
   "priority": "critical | standard | bulk",
-  "broadcastId": "uuid (optional, set on fan-out-expanded events)"
+  "broadcastId": "uuid (optional, set on fan-out-expanded events)",
+  "idempotencyKey": "string, nullable — Door 1's Idempotency-Key header, carried through for NotificationRequest.idempotencyKey; null for anything Door 2 originated"
 }
 ```
 `payloadRef` carries template variable keys/values, not rendered content —
@@ -313,15 +332,37 @@ are protected against a long-retention log.
 ```
 Self-contained by design — see "Self-contained command payload" above.
 
-**Delivery-status envelope** (`delivery-status`):
+**Delivery-status envelope** (`delivery-status`) — a discriminated union
+on `status`, not one flat shape (see "Delivery status has one writer"
+above and `DeliveryStatusEvent`'s doc comment):
 ```json
+// status: "accepted" — creates services/projection-notification's row,
+// so it carries everything NotificationRequest.accept() needs:
 {
   "notificationRequestId": "uuid",
-  "status": "accepted | sent | delivered | failed",
-  "attemptNumber": "int (absent for accepted)",
-  "providerResponse": "string, nullable"
+  "status": "accepted",
+  "attemptNumber": 0,
+  "occurredAt": "ISO 8601 timestamp",
+  "tenantId": "uuid",
+  "recipientId": "uuid",
+  "notificationType": "string",
+  "idempotencyKey": "string, nullable — null for a Door-2-originated request",
+  "channel": "sms | push | email | in_app — the router's *resolved* channel, never null here",
+  "broadcastId": "uuid, nullable",
+  "payload": "the *rendered* content, as published on command.* — not payloadRef"
+}
+// status: "sent" | "delivered" | "failed" — only ever advances a row
+// that must already exist, so nothing more than this:
+{
+  "notificationRequestId": "uuid",
+  "status": "sent",
+  "attemptNumber": "int",
+  "occurredAt": "ISO 8601 timestamp"
 }
 ```
+(`providerResponse` — a provider's raw response string — lives on
+`DeliveryAttempt`, a separate per-attempt record each channel worker
+writes directly; it was never actually a `DeliveryStatusEvent` field.)
 
 ## Consumer guarantees
 

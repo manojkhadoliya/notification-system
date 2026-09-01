@@ -84,6 +84,7 @@ export class SchedulerService {
         payloadRef: notification.payload,
         priority: notification.priority,
         broadcastId: notification.broadcastId,
+        idempotencyKey: notification.idempotencyKey,
       });
       await this.deps.scheduledNotificationRepository.save(
         notification.markEmitted(),
