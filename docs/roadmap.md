@@ -419,7 +419,9 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
         with a measured one
 - [ ] `docker compose up` demo works end-to-end for all four channels,
       including a broadcast (Door 2 → fan-out → many recipients) and a
-      quiet-hours deferral that later re-emits
+      quiet-hours deferral that later re-emits — plan in
+      [`local-development.md`](local-development.md), not yet executed
+      (no Docker in the session that plan was written in)
 
 ## Future work (not phased — introduce later if needed)
 
