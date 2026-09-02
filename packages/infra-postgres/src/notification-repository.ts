@@ -93,25 +93,59 @@ export class PostgresNotificationRepository implements NotificationRepository {
     return rows.map(attemptToDomain);
   }
 
+  /**
+   * `DeliveryAttempt.notificationRequestId` is a real FK to
+   * `NotificationRequest.id` — but the row it points at is written by a
+   * *different* consumer (`services/projection-notification`, off the
+   * `delivery-status` topic's "accepted" event) than the one calling
+   * this method (`services/worker-*`, off `command.{channel}`). Kafka
+   * gives no cross-topic ordering guarantee, so a worker that's faster
+   * than projection-notification — confirmed happening in local runs,
+   * not hypothetical, see docs/local-development.md — can get here
+   * before the parent row exists, and the upsert fails with Prisma's
+   * P2003. This is retried a few times with a short delay rather than
+   * fixed by publish-order alone (`services/router`'s `dispatch()`
+   * already publishes "accepted" before the command, which narrows the
+   * window but can't close it — nothing enforces that
+   * projection-notification wins the race even when it goes first).
+   * A P2003 that outlives every retry is a real bug (a genuinely
+   * missing/wrong `notificationRequestId`), not a race, so it's
+   * rethrown rather than swallowed.
+   */
   async saveAttempt(attempt: DeliveryAttempt): Promise<void> {
-    await this.prisma.deliveryAttempt.upsert({
-      where: {
-        notificationRequestId_attemptNumber: {
-          notificationRequestId: attempt.notificationRequestId,
-          attemptNumber: attempt.attemptNumber,
-        },
-      },
-      create: {
-        notificationRequestId: attempt.notificationRequestId,
-        attemptNumber: attempt.attemptNumber,
-        status: attempt.status,
-        providerResponse: attempt.providerResponse,
-        createdAt: attempt.createdAt,
-      },
-      update: {
-        status: attempt.status,
-        providerResponse: attempt.providerResponse,
-      },
-    });
+    const maxAttempts = 5;
+    const baseDelayMs = 100;
+    for (let i = 1; i <= maxAttempts; i++) {
+      try {
+        await this.prisma.deliveryAttempt.upsert({
+          where: {
+            notificationRequestId_attemptNumber: {
+              notificationRequestId: attempt.notificationRequestId,
+              attemptNumber: attempt.attemptNumber,
+            },
+          },
+          create: {
+            notificationRequestId: attempt.notificationRequestId,
+            attemptNumber: attempt.attemptNumber,
+            status: attempt.status,
+            providerResponse: attempt.providerResponse,
+            createdAt: attempt.createdAt,
+          },
+          update: {
+            status: attempt.status,
+            providerResponse: attempt.providerResponse,
+          },
+        });
+        return;
+      } catch (err) {
+        const isMissingParent =
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === "P2003";
+        if (!isMissingParent || i === maxAttempts) {
+          throw err;
+        }
+        await new Promise((resolve) => setTimeout(resolve, baseDelayMs * i));
+      }
+    }
   }
 }

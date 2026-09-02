@@ -43,6 +43,12 @@ const RECIPIENT_COUNT = 3;
 
 const prisma = new PrismaClient({ datasourceUrl: DATABASE_URL });
 
+// Closed in the shared `.finally()` below, not just on the success path —
+// see that block's comment for why a failure/timeout used to leave a
+// zombie process holding these open forever.
+let consumer;
+let producer;
+
 function withTimeout(promise, label) {
   let timer;
   const timeout = new Promise((_, reject) => {
@@ -74,10 +80,10 @@ async function main() {
     brokers: KAFKA_BROKERS,
     clientId: "fanout-expander-smoke-test",
   });
-  const producer = await createKafkaProducer(kafka);
+  producer = await createKafkaProducer(kafka);
   const broker = new KafkaMessageBroker(producer);
 
-  const consumer = new KafkaConsumer(kafka, {
+  consumer = new KafkaConsumer(kafka, {
     groupId: `fanout-expander-smoke-test-${randomUUID()}`,
     topics: [eventTopic("standard")],
   });
@@ -130,9 +136,6 @@ async function main() {
   );
 
   console.log("\nAll services/fanout-expander smoke tests passed.");
-
-  await consumer.stop();
-  await producer.disconnect();
 }
 
 main()
@@ -141,5 +144,14 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
+    // Runs on every path, not just success — a failed assertion or a
+    // withTimeout() rejection used to skip straight to catch() above,
+    // leaving the consumer/producer's open Kafka connections keeping
+    // the event loop (and this process) alive forever instead of
+    // actually exiting non-zero as this script's own header promises.
+    // Found by hitting it directly (a different service's smoke test):
+    // a failing run just hung.
+    if (consumer) await consumer.stop();
+    if (producer) await producer.disconnect();
     await prisma.$disconnect();
   });

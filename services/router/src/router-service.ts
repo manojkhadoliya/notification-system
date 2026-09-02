@@ -136,7 +136,13 @@ export class RouterService {
       renderedPayload,
       attemptNumber: 1,
     };
-    await this.deps.messageBroker.publishCommand(command);
+    // Published *before* the command, deliberately: "accepted" is what
+    // lets services/projection-notification create the NotificationRequest
+    // row that a channel worker's own DeliveryAttempt write has a real FK
+    // to (see PostgresNotificationRepository.saveAttempt's doc comment).
+    // Kafka gives no cross-topic ordering guarantee, so this narrows that
+    // race rather than closing it — the worker side's bounded retry is
+    // what actually makes it safe either way.
     await this.deps.messageBroker.publishDeliveryStatus({
       notificationRequestId: event.notificationRequestId,
       status: "accepted",
@@ -159,6 +165,7 @@ export class RouterService {
       broadcastId: event.broadcastId,
       payload: renderedPayload,
     });
+    await this.deps.messageBroker.publishCommand(command);
   }
 
   private async renderBody(event: NotificationEvent): Promise<string | null> {

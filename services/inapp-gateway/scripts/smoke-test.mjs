@@ -37,6 +37,12 @@ const PORT = process.env.PORT ?? 3001;
 const FEED_STREAM_PATH = "/v1/feed/stream";
 const TIMEOUT_MS = 15_000;
 
+// Closed in the shared `.finally()` below, not just on the success path —
+// see that block's comment for why a failure/timeout used to leave a
+// zombie process holding these open forever.
+let socket;
+let redis;
+
 function withTimeout(promise, label) {
   let timer;
   const timeout = new Promise((_, reject) => {
@@ -53,7 +59,7 @@ async function main() {
   const notificationRequestId = randomUUID();
 
   console.log("Opening a WebSocket connection to services/inapp-gateway...");
-  const socket = new WebSocket(
+  socket = new WebSocket(
     `ws://${HOST}:${PORT}${FEED_STREAM_PATH}?recipientId=${recipientId}`,
   );
   await withTimeout(
@@ -71,7 +77,7 @@ async function main() {
     "a pub/sub notification pushed down the socket",
   );
 
-  const redis = createRedis({ url: REDIS_URL });
+  redis = createRedis({ url: REDIS_URL });
   console.log(`Publishing directly onto ${INAPP_PUBSUB_CHANNEL}...`);
   await redis.publish(
     INAPP_PUBSUB_CHANNEL,
@@ -89,12 +95,21 @@ async function main() {
   assert.equal(message.renderedPayload.body, "smoke test");
 
   console.log("\nAll services/inapp-gateway smoke tests passed.");
-
-  socket.close();
-  await redis.quit();
 }
 
-main().catch((error) => {
-  console.error("\nSMOKE TEST FAILED:", error);
-  process.exitCode = 1;
-});
+main()
+  .catch((error) => {
+    console.error("\nSMOKE TEST FAILED:", error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    // Runs on every path, not just success — a failed assertion or a
+    // withTimeout() rejection used to skip straight to catch() above,
+    // leaving the open WebSocket/Redis connections keeping the event
+    // loop (and this process) alive forever instead of actually
+    // exiting non-zero as this script's own header promises. Found by
+    // hitting it directly (a different service's smoke test): a
+    // failing run just hung.
+    if (socket) socket.close();
+    if (redis) await redis.quit();
+  });
