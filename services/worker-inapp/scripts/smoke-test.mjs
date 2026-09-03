@@ -40,6 +40,15 @@ const TIMEOUT_MS = 15_000;
 
 const prisma = new PrismaClient({ datasourceUrl: DATABASE_URL });
 
+// Closed in the shared `.finally()` below, not just on the success path —
+// see that block's comment for why a failure/timeout used to leave a
+// zombie process holding these open forever.
+let consumer;
+let producer;
+let subscriber;
+let subscriberRedis;
+let redis;
+
 function withTimeout(promise, label) {
   let timer;
   const timeout = new Promise((_, reject) => {
@@ -64,10 +73,10 @@ async function main() {
     brokers: KAFKA_BROKERS,
     clientId: "worker-inapp-smoke-test",
   });
-  const producer = await createKafkaProducer(kafka);
+  producer = await createKafkaProducer(kafka);
   const broker = new KafkaMessageBroker(producer);
 
-  const consumer = new KafkaConsumer(kafka, {
+  consumer = new KafkaConsumer(kafka, {
     groupId: `worker-inapp-smoke-test-${randomUUID()}`,
     topics: ["delivery-status"],
   });
@@ -82,9 +91,9 @@ async function main() {
     resolveStatus(JSON.parse(message.value));
   });
 
-  const redis = createRedis({ url: REDIS_URL });
-  const subscriberRedis = redis.duplicate();
-  const subscriber = new InAppSubscriber(subscriberRedis);
+  redis = createRedis({ url: REDIS_URL });
+  subscriberRedis = redis.duplicate();
+  subscriber = new InAppSubscriber(subscriberRedis);
   let resolveFeedNotification;
   const feedNotificationReceived = new Promise((resolve) => {
     resolveFeedNotification = resolve;
@@ -129,12 +138,6 @@ async function main() {
   assert.equal(feedItem.summary, "smoke test");
 
   console.log("\nAll services/worker-inapp smoke tests passed.");
-
-  await consumer.stop();
-  await subscriber.stop();
-  await producer.disconnect();
-  await subscriberRedis.quit();
-  await redis.quit();
 }
 
 main()
@@ -143,5 +146,16 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
+    // Runs on every path, not just success — a failed assertion or a
+    // withTimeout() rejection used to skip straight to catch() above,
+    // leaving these open connections keeping the event loop (and this
+    // process) alive forever instead of actually exiting non-zero as
+    // this script's own header promises. Found by hitting it directly
+    // (a different service's smoke test): a failing run just hung.
+    if (consumer) await consumer.stop();
+    if (subscriber) await subscriber.stop();
+    if (producer) await producer.disconnect();
+    if (subscriberRedis) await subscriberRedis.quit();
+    if (redis) await redis.quit();
     await prisma.$disconnect();
   });

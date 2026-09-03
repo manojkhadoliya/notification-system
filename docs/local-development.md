@@ -9,8 +9,10 @@ to run it.
 
 Every PR this session shipped with the caveat "not yet verified against
 live Postgres/Kafka/Redis — no Docker in the session this was built in."
-Nothing in that code has changed since; this plan is how that caveat
-finally gets closed out, service by service.
+**Phase A has now actually been run** (2026-09-02, once Docker Desktop
+was installed) — that caveat is retired for every service. See §2.6 for
+what that run found (two real bugs, both fixed) and §3 for what's still
+ahead (Phase B, containerization, not yet done).
 
 ## 0. What already exists vs. what doesn't
 
@@ -25,6 +27,11 @@ finally gets closed out, service by service.
   round-trips one real message through that service against live infra.
 - `.env.example` — the full set of env vars every service reads, with
   defaults documented per service.
+- `packages/infra-postgres/prisma/migrations/` — as of §2.6's run. This
+  did **not** exist before (schema.prisma only, no committed migration),
+  meaning `prisma migrate deploy` would have failed on any fresh
+  environment with nothing to apply — see §2.6 for how this was found
+  and closed.
 
 **Does not exist yet — this is the actual gap:**
 - **No Dockerfile anywhere in the repo.** `infra/README.md` has said
@@ -45,10 +52,17 @@ finally gets closed out, service by service.
 
 - **Docker Desktop for Windows**, WSL2 backend (the standard, current
   recommendation from Docker — the alternate "Windows containers"
-  backend cannot run the Linux images this compose file uses). Not
-  installed as of this plan being written — `docker --version` fails in
-  both this session's Git Bash and PowerShell. Install and confirm
-  `docker compose version` succeeds before anything below.
+  backend cannot run the Linux images this compose file uses). Installed
+  and confirmed working as of §2.6's run. One install-specific gotcha
+  worth knowing: a per-user install can land under
+  `%LOCALAPPDATA%\Programs\DockerDesktop\resources\bin` rather than the
+  more commonly-documented `C:\Program Files\Docker\Docker\resources\bin`
+  — if `docker --version` fails right after installing even though
+  Docker Desktop is visibly running, check the actual install path
+  (`Get-CimInstance Win32_Process -Filter "Name='Docker Desktop.exe'"`)
+  before assuming the install failed, and make sure that `resources\bin`
+  directory is on `PATH` (a shell/session started before the install
+  won't pick up a `PATH` change made during it — open a new one).
 - **Git Bash** — already present (this session's shell), needed because
   `infra/kafka/create-topics.sh` is a bash script; PowerShell can't run
   it directly.
@@ -88,6 +102,17 @@ infra/docker-compose.yml ps`) before continuing — `pnpm kafka:topics`
 will fail fast against a Kafka that isn't ready yet, which is the
 correct behavior, not a bug to work around.
 
+**Git Bash + `docker compose exec` gotcha:** `create-topics.sh` execs
+`/opt/kafka/bin/kafka-topics.sh` *inside* the container, but Git Bash's
+MSYS layer rewrites any argument that looks like a POSIX path before
+handing it to `docker.exe` (a native Win32 program) — `/opt/kafka/...`
+becomes `C:/Program Files/Git/opt/kafka/...`, and the exec fails with
+`no such file or directory` for a path that's correct, just mangled in
+transit. Fix: `export MSYS_NO_PATHCONV=1` before running `pnpm
+kafka:topics` (or prefix the one command: `MSYS_NO_PATHCONV=1 pnpm
+kafka:topics`). Confirmed necessary in this session's Git Bash; not an
+issue in PowerShell, which has no POSIX-path rewriting to begin with.
+
 ### 2.2 Configure
 
 ```
@@ -108,6 +133,25 @@ loader; see §5's note on this.
 ```
 pnpm -w build
 ```
+
+### 2.3a Run database migrations
+
+```
+cd packages/infra-postgres
+DATABASE_URL="postgresql://notification:notification@localhost:5432/notification" npx prisma migrate dev --name init --skip-seed
+```
+
+**Missing from earlier drafts of this plan — a real gap, not an
+oversight worth glossing over.** No `packages/infra-postgres/prisma/
+migrations/` directory existed anywhere in the repo before §2.6's run;
+`schema.prisma` had never actually been turned into a migration. Every
+service's own `README.md#local-setup` correctly assumes *a* schema is
+already applied, but nothing in this repo (this plan included, until
+now) said how to get from zero to that state. `migrate dev` is right for
+this one-time, single-developer, no-other-migrations-yet situation; once
+a second migration exists, use `prisma migrate deploy` instead (no
+interactive prompts, doesn't try to generate a new migration from
+schema drift — the right command for every run after the first).
 
 ### 2.4 Start every service
 
@@ -183,6 +227,88 @@ hand once smoke tests are green: a broadcast (Door 2 → `fanout-expander`
 re-emits — the two multi-hop scenarios `docs/roadmap.md`'s
 "`docker compose up` demo" item specifically calls out.
 
+### 2.6 Executed — results (2026-09-02)
+
+Phase A has actually been run against live Postgres/Kafka/Redis on this
+machine, once Docker Desktop was installed: all four infra containers
+healthy, all 25 topics created, all ten services started and joined
+their consumer groups cleanly, all ten `scripts/smoke-test.mjs` passed.
+The exercise found two real bugs — both fixed, not just noted — plus one
+tooling-only issue in the smoke tests themselves. None of this was
+hypothetical; every item below reproduced directly in this run.
+
+**1. `infra/docker-compose.yml`'s Kafka port mapping was wrong**
+(infra bug, not application code). It published host `9092 → container
+9092` — the *internal* `PLAINTEXT` listener, advertised to clients as
+`kafka:9092`. The listener actually meant for host access,
+`PLAINTEXT_HOST` (advertised as `localhost:9092`), was bound to
+container port `29092`, which was never published at all. A host
+process could complete Kafka's initial bootstrap handshake (hitting
+whichever listener happens to be on the published port) but then failed
+every real connection with `getaddrinfo ENOTFOUND kafka` — the broker's
+metadata response told it to reconnect to `kafka:9092`, a hostname that
+only resolves inside the compose network. **Fixed:** `ports:
+["9092:29092"]` — see that file's own comment for the full listener
+walkthrough. This had never been caught before because nothing had ever
+run a host process against this compose file until now.
+
+**2. A real race between two independent Kafka consumers, surfaced
+under live load.** `services/router`'s `dispatch()` publishes a command
+(to `command.{channel}`, consumed by a channel worker) and an
+`"accepted"` `DeliveryStatusEvent` (to `delivery-status`, consumed by
+`services/projection-notification`, which creates the
+`NotificationRequest` row). A channel worker's own `DeliveryAttempt`
+write has a real Postgres foreign key to that same
+`NotificationRequest.id`. Kafka gives no cross-topic ordering guarantee,
+and a worker can be faster than projection-notification — confirmed
+happening locally, not a theoretical edge case: `worker-sms` hit
+`PrismaClientKnownRequestError P2003` (foreign key violation) trying to
+record an attempt for a `NotificationRequest` row that
+projection-notification hadn't written yet. **Fixed two ways, together
+(reordering alone can't close this — Kafka still gives no guarantee
+either way):**
+- `router-service.ts`'s `dispatch()` now publishes `"accepted"` *before*
+  the command, narrowing the window in the common case.
+- `PostgresNotificationRepository.saveAttempt` now retries a P2003 up to
+  5 times with a short backoff before giving up — the parent row is
+  guaranteed to arrive soon, so this converts an inherent race into a
+  brief, bounded wait instead of a crash. A P2003 that outlives every
+  retry still throws — a genuinely wrong `notificationRequestId` is a
+  real bug, not a race, and shouldn't be swallowed.
+
+**3. Tooling-only: every Kafka-touching `scripts/smoke-test.mjs`
+(`router`, `scheduler`, `fanout-expander`, `projection-notification`,
+all four `worker-*`) and `inapp-gateway`'s own only closed its
+consumer/producer/socket/Redis handles on the *success* path.** A failed
+assertion or a `withTimeout()` rejection skipped straight to `.catch()`,
+leaving those open connections keeping the process alive forever instead
+of actually exiting non-zero as every one of these scripts' own header
+comments promise. Reproduced directly: a genuinely failing router smoke
+test run (see finding 4 below) hung indefinitely instead of printing its
+failure and exiting — confirmed via `[exited with code 0]` only *after*
+manually killing an unrelated zombie process from an earlier failed run
+freed up something that let it proceed. **Fixed** by moving all cleanup
+into each script's shared `.finally()`, guarded by existence checks, so
+it runs on every path.
+
+**4. Also tooling-only, and only visible after fixing #2:**
+`router`'s own smoke test recorded *whatever* `delivery-status` message
+arrived for its key, not specifically the `"accepted"` one its own
+header comment says it's testing. Before the P2003 fix, `worker-sms`
+never got far enough to publish its own `"sent"` `delivery-status` for
+the same `notificationRequestId`, so this never had a chance to
+misfire. Once workers process fast and reliably (post-fix), `"sent"`
+can arrive and overwrite the map entry the test reads back, failing an
+assertion (`expected: 'accepted', actual: 'sent'`) that has nothing to
+do with `services/router` actually working correctly. **Fixed** by
+having the message handler ignore non-`"accepted"` `delivery-status`
+messages, matching the test's own stated intent.
+
+All ten `scripts/smoke-test.mjs` pass cleanly against this fixed stack;
+`pnpm -w test`/`typecheck`/`lint`/`boundaries` all still pass unit-level
+(these are real infra/production/tooling fixes, not workarounds, and the
+existing fakes-based unit tests already covered the code paths touched).
+
 ## 3. Phase B — full containerization
 
 The roadmap's actual "`docker compose up` demo works end-to-end" item:
@@ -242,12 +368,23 @@ Dockerfile, args: { SERVICE: <name> } }`, `depends_on` with
 `condition: service_healthy` on whichever of `postgres`/`redis`/`kafka`
 it actually needs (see each service's own README's "Depends on"), and
 an `environment:` block using the **in-network** hostnames — `postgres`,
-`redis`, `kafka:9092` (the `PLAINTEXT://kafka:9092` listener already
-configured, not the `PLAINTEXT_HOST` one `.env.example` uses for host
-processes) and `http://jaeger:4318` for tracing — not `localhost`,
-since these now run inside the compose network, not on the host.
-`services/api`/`services/inapp-gateway` also need `ports:` publishing
-(`3000:3000`, `3001:3001`) to stay reachable from the host.
+`redis`, `kafka:9092` (the `PLAINTEXT://kafka:9092` listener — a
+containerized service, unlike a host process, talks to Kafka over the
+compose network, so it wants this listener, not `PLAINTEXT_HOST`) and
+`http://jaeger:4318` for tracing — not `localhost`, since these now run
+inside the compose network, not on the host. `services/api`/
+`services/inapp-gateway` also need `ports:` publishing (`3000:3000`,
+`3001:3001`) to stay reachable from the host.
+
+This `PLAINTEXT` vs. `PLAINTEXT_HOST` split is exactly what §2.6 found
+broken for the *host-process* side (`kafka`'s container port was
+publishing the wrong internal listener) — that fix
+(`infra/docker-compose.yml`'s `ports: ["9092:29092"]`) is what makes
+`.env.example`'s `KAFKA_BROKERS=localhost:9092` actually reach
+`PLAINTEXT_HOST` today. It doesn't affect this section: a containerized
+service reaches Kafka over the compose network directly, via the
+`PLAINTEXT` listener's own container port (9092), never through the
+host-published port at all.
 
 ### 3.3 What this needs that Phase A doesn't
 
@@ -297,18 +434,18 @@ since these now run inside the compose network, not on the host.
 
 ## 5. Sequencing
 
-1. Install Docker Desktop (WSL2 backend); confirm `docker compose
+1. ✅ Install Docker Desktop (WSL2 backend); confirm `docker compose
    version`.
-2. Phase A, in full, including every smoke test — this is what actually
-   retires the "not yet verified against live infra" caveat on every
-   merged PR this session.
-3. Only then, Phase B — write the `Dockerfile`, the compose additions,
-   rebuild everything as containers, re-run the same smoke tests against
-   the containerized stack.
-4. Once both are green: the two multi-hop scenarios called out in §2.5
-   (a broadcast; a quiet-hours deferral that re-emits), by hand, as the
-   concrete satisfaction of `docs/roadmap.md`'s "`docker compose up`
-   demo works end-to-end" item.
+2. ✅ Phase A, in full, including every smoke test — done, see §2.6.
+   This retires the "not yet verified against live infra" caveat on
+   every merged PR this session.
+3. **Not yet done** — Phase B: write the `Dockerfile`, the compose
+   additions, rebuild everything as containers, re-run the same smoke
+   tests against the containerized stack.
+4. **Not yet done** — once Phase B is green: the two multi-hop scenarios
+   called out in §2.5 (a broadcast; a quiet-hours deferral that
+   re-emits), by hand, as the concrete satisfaction of
+   `docs/roadmap.md`'s "`docker compose up` demo works end-to-end" item.
 
 Not covered by this plan (genuinely separate, later work — see
 `docs/roadmap.md`'s "Future work" section): a hosted deployment, load

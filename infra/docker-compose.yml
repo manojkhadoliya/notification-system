@@ -43,8 +43,19 @@ services:
   kafka:
     image: apache/kafka:3.8.0
     restart: unless-stopped
+    # Host port 9092 forwards to the *container's* 29092 — the
+    # PLAINTEXT_HOST listener below, advertised as localhost:9092. The
+    # PLAINTEXT listener stays on container port 9092 unpublished, used
+    # only by other containers on the compose network via the `kafka`
+    # hostname (advertised as kafka:9092). Publishing 9092:9092 instead
+    # (matching container port to host port) looks right but isn't: a
+    # host client's TCP connection would land on the PLAINTEXT listener,
+    # which hands back `kafka:9092` in its metadata response for the
+    # follow-up produce/fetch connection — unresolvable outside Docker.
+    # Found by actually running this against a host process (see
+    # docs/local-development.md).
     ports:
-      - "9092:9092"
+      - "9092:29092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller

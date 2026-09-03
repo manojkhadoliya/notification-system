@@ -420,8 +420,17 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
 - [ ] `docker compose up` demo works end-to-end for all four channels,
       including a broadcast (Door 2 → fan-out → many recipients) and a
       quiet-hours deferral that later re-emits — plan in
-      [`local-development.md`](local-development.md), not yet executed
-      (no Docker in the session that plan was written in)
+      [`local-development.md`](local-development.md). Its Phase A
+      (hybrid: infra in Docker, all ten services as host processes) is
+      now done — every `scripts/smoke-test.mjs` passes against a live
+      stack, and the run found and fixed two real bugs along the way (a
+      broken Kafka host-port mapping; a genuine cross-topic race between
+      `services/router`'s command/accepted publishes and a channel
+      worker's `DeliveryAttempt` write — see
+      [`local-development.md#2.6`](local-development.md#26-executed--results-2026-09-02)
+      for both). Phase B (actual containerization — a `Dockerfile`, ten
+      new `docker-compose.yml` service blocks) and the two by-hand
+      multi-hop scenarios above are still ahead
 
 ## Future work (not phased — introduce later if needed)
 

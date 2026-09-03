@@ -37,6 +37,11 @@ const POLL_INTERVAL_MS = 250;
 
 const prisma = new PrismaClient({ datasourceUrl: DATABASE_URL });
 
+// Closed in the shared `.finally()` below, not just on the success path —
+// see that block's comment for why a failure/timeout used to leave a
+// zombie process holding this open forever.
+let producer;
+
 async function pollUntil(fn, label) {
   const deadline = Date.now() + TIMEOUT_MS;
   for (;;) {
@@ -62,7 +67,7 @@ async function main() {
     brokers: KAFKA_BROKERS,
     clientId: "projection-notification-smoke-test",
   });
-  const producer = await createKafkaProducer(kafka);
+  producer = await createKafkaProducer(kafka);
   const broker = new KafkaMessageBroker(producer);
 
   console.log("Publishing accepted...");
@@ -128,8 +133,6 @@ async function main() {
   });
 
   console.log("\nAll services/projection-notification smoke tests passed.");
-
-  await producer.disconnect();
 }
 
 main()
@@ -138,5 +141,13 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
+    // Runs on every path, not just success — a failed assertion or a
+    // pollUntil() timeout used to skip straight to catch() above,
+    // leaving the producer's open Kafka connection keeping the event
+    // loop (and this process) alive forever instead of actually
+    // exiting non-zero as this script's own header promises. Found by
+    // hitting it directly (a different service's smoke test): a
+    // failing run just hung.
+    if (producer) await producer.disconnect();
     await prisma.$disconnect();
   });
