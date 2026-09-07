@@ -421,16 +421,22 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       including a broadcast (Door 2 → fan-out → many recipients) and a
       quiet-hours deferral that later re-emits — plan in
       [`local-development.md`](local-development.md). Its Phase A
-      (hybrid: infra in Docker, all ten services as host processes) is
-      now done — every `scripts/smoke-test.mjs` passes against a live
-      stack, and the run found and fixed two real bugs along the way (a
-      broken Kafka host-port mapping; a genuine cross-topic race between
-      `services/router`'s command/accepted publishes and a channel
-      worker's `DeliveryAttempt` write — see
-      [`local-development.md#2.6`](local-development.md#26-executed--results-2026-09-02)
-      for both). Phase B (actual containerization — a `Dockerfile`, ten
-      new `docker-compose.yml` service blocks) and the two by-hand
-      multi-hop scenarios above are still ahead
+      (hybrid: infra in Docker, all ten services as host processes) and
+      Phase B (full containerization: a shared `Dockerfile`, eleven new
+      `docker-compose.yml` service blocks) are both now done — every
+      `scripts/smoke-test.mjs` passes against both a live host-process
+      stack and the fully containerized one, and each run found and
+      fixed real bugs along the way: Phase A, a broken Kafka host-port
+      mapping and a genuine cross-topic race between `services/router`'s
+      command/accepted publishes and a channel worker's `DeliveryAttempt`
+      write ([`local-development.md#2.6`](local-development.md#26-executed--results-2026-09-02));
+      Phase B, Alpine's missing OpenSSL breaking Prisma's query engine,
+      `pnpm deploy` turning out to be broken on this repo in both its
+      modes, and a Windows/WSL2 host-port collision that isn't this
+      repo's to fix
+      ([`local-development.md#3.4`](local-development.md#34-executed--results-2026-09-07)
+      for all three). Only the two by-hand multi-hop scenarios above are
+      still ahead
 
 ## Future work (not phased — introduce later if needed)
 

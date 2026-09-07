@@ -1,0 +1,9 @@
+# This checkout runs with core.autocrlf=true (see
+# docs/local-development.md#4-windows-specific-things-already-known-to-bite):
+# on its own that would check these files out with CRLF line endings,
+# which breaks them when run inside a Linux container/Git Bash (a
+# Dockerfile with CRLF can fail to parse; a shebang script with a CRLF
+# first line fails outright). Force LF regardless of the checkout
+# platform's autocrlf setting.
+*.sh text eol=lf
+Dockerfile text eol=lf

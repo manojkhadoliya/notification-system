@@ -11,8 +11,10 @@ Every PR this session shipped with the caveat "not yet verified against
 live Postgres/Kafka/Redis — no Docker in the session this was built in."
 **Phase A has now actually been run** (2026-09-02, once Docker Desktop
 was installed) — that caveat is retired for every service. See §2.6 for
-what that run found (two real bugs, both fixed) and §3 for what's still
-ahead (Phase B, containerization, not yet done).
+what that run found (two real bugs, both fixed). **Phase B has now also
+actually been run** (2026-09-07) — see §3.4 for what that found (three
+more real bugs, all fixed) and §3.5 for the by-hand multi-hop scenarios,
+still ahead.
 
 ## 0. What already exists vs. what doesn't
 
@@ -32,21 +34,24 @@ ahead (Phase B, containerization, not yet done).
   meaning `prisma migrate deploy` would have failed on any fresh
   environment with nothing to apply — see §2.6 for how this was found
   and closed.
+- `Dockerfile`, `.dockerignore`, `.gitattributes` (repo root), and eleven
+  new service blocks (ten app services + `migrate`) in
+  `infra/docker-compose.yml` — as of §3.4's run. `infra/README.md` had
+  said since Phase 0: "`services/*` app containers are added to
+  [`docker-compose.yml`] once each has a Dockerfile and a real
+  entrypoint — Phase 1, not before." That's now done; see §3.1-§3.4 for
+  what it took.
 
 **Does not exist yet — this is the actual gap:**
-- **No Dockerfile anywhere in the repo.** `infra/README.md` has said
-  since Phase 0: "`services/*` app containers are added to
-  [`docker-compose.yml`] once each has a Dockerfile and a real
-  entrypoint — Phase 1, not before." Every entrypoint now exists; no
-  Dockerfile does.
-- **No app-service entries in `docker-compose.yml`** — only the four
-  infra containers.
-- **No `.env` file** — only `.env.example`. Never copied, because
-  nothing has been run yet.
-- **No orchestration for running 10 long-lived Node processes at once**
-  on a single machine outside a container — every README's "Local
-  setup" shows one service in isolation (`pnpm --filter X start`),
-  correct for that document but not a fleet.
+- **No `.env` file** — only `.env.example`. Never copied on a fresh
+  clone, since nothing has been run on it yet.
+- **No orchestration for running 10 long-lived Node processes at once
+  on a single machine outside a container**, for Phase A specifically —
+  every README's "Local setup" shows one service in isolation (`pnpm
+  --filter X start`), correct for that document but not a fleet. Not an
+  issue for Phase B — `docker compose up -d` already starts all ten.
+- **The two by-hand multi-hop demo scenarios** (§3.5) — not yet run
+  against the containerized stack.
 
 ## 1. Prerequisites
 
@@ -314,15 +319,41 @@ existing fakes-based unit tests already covered the code paths touched).
 The roadmap's actual "`docker compose up` demo works end-to-end" item:
 one command starts everything, app services included. Bigger lift, not
 needed to validate the application code (Phase A already does that) —
-this is about the deployment story. Do this after Phase A is green, so
-any failure here is known to be a containerization problem, not an
-application one.
+this is about the deployment story. Done after Phase A was green, so
+any failure here was known to be a containerization problem, not an
+application one — see §3.4 for what that separation actually caught in
+practice.
 
 ### 3.1 Dockerfile strategy
 
-One shared, parameterized `Dockerfile` at the repo root (not ten
-near-identical ones) — a multi-stage build using `pnpm deploy` to
-produce a minimal, production-only bundle for one service at a time:
+**As actually built (see §3.4 for how this differs from the original
+plan below, and why).** One shared `Dockerfile` at the repo root (not
+ten near-identical ones), three stages:
+
+- `build` — `node:22-alpine` + `openssl` (§3.4 finding 1), full
+  `pnpm install --frozen-lockfile` + `pnpm -w build` of the whole
+  workspace.
+- `migrate` — reuses `build` as-is, `ENTRYPOINT ["npx", "prisma",
+  "migrate", "deploy"]` from `packages/infra-postgres`. What
+  `infra/docker-compose.yml`'s `migrate` service (§3.2) runs.
+- `runtime` — `node:22-alpine` + `openssl`, `COPY --from=build /repo .`
+  (the *entire* built workspace, not a per-service slice — see §3.4
+  finding 2 for why), `WORKDIR /repo/services/${SERVICE}`, `CMD ["node",
+  "dist/index.js"]`.
+
+Each service's own image is built with `docker build --build-arg
+SERVICE=worker-sms .` (etc.) — one Dockerfile, ten images, via
+`docker-compose.yml`'s per-service `build.args`.
+
+The original plan (below, kept for the record) called for `pnpm deploy
+--prod` in the runtime stage instead, to produce a minimal,
+per-service bundle rather than copying the whole workspace into every
+image. It doesn't work on this repo — see §3.4 finding 2 for the actual
+errors and why the fallback (`--legacy`) doesn't work either. What's
+below was the plan going in; §3.4 is what actually happened.
+
+<details>
+<summary>Original plan (superseded by §3.4 finding 2)</summary>
 
 ```dockerfile
 # syntax=docker/dockerfile:1
@@ -342,39 +373,42 @@ CMD ["node", "dist/index.js"]
 ```
 
 `pnpm deploy --prod` (pnpm's built-in monorepo-aware deploy command —
-`pnpm@11.4.0` still labels it "Experimental!" in its own `--help`, worth
-re-checking against whatever pnpm version is actually installed when
-this is built) resolves just that package's real dependency subgraph —
+`pnpm@11.4.0` still labels it "Experimental!" in its own `--help`)
+was expected to resolve just that package's real dependency subgraph —
 including its `workspace:*` internal deps — into a self-contained,
-production-only `node_modules` + `dist`, so the runtime image doesn't
-carry the other nine services or any devDependency. Confirmed syntax
-(`pnpm --help deploy`, this session): `pnpm --filter=<project name>
-deploy <target directory>`, `--prod` for the "skip devDependencies"
-behavior used above. Each service's own image is built with `docker
-build --build-arg SERVICE=worker-sms .` (etc.) — one Dockerfile, ten
-images, via `docker-compose.yml`'s per-service `build.args`.
+production-only `node_modules` + `dist`. Also assumed: `infra-postgres`'s
+Prisma query-engine binary needs no extra step since `prisma generate`
+already runs on `postinstall` and both stages share a platform — true as
+far as it goes, but missing the OpenSSL dependency entirely (§3.4
+finding 1).
 
-`infra-postgres`'s Prisma client needs its query-engine binary for the
-image's actual platform — `prisma generate` already runs on `postinstall`
-(see that package's `package.json`), so it's covered by the `pnpm
-install` step above without a separate command, provided the build
-stage's platform matches the runtime stage's (both `node:22-alpine`
-here, so yes).
+</details>
 
 ### 3.2 `docker-compose.yml` additions
 
 Ten new service blocks, each: `build: { context: .., dockerfile:
-Dockerfile, args: { SERVICE: <name> } }`, `depends_on` with
-`condition: service_healthy` on whichever of `postgres`/`redis`/`kafka`
-it actually needs (see each service's own README's "Depends on"), and
-an `environment:` block using the **in-network** hostnames — `postgres`,
-`redis`, `kafka:9092` (the `PLAINTEXT://kafka:9092` listener — a
-containerized service, unlike a host process, talks to Kafka over the
-compose network, so it wants this listener, not `PLAINTEXT_HOST`) and
-`http://jaeger:4318` for tracing — not `localhost`, since these now run
-inside the compose network, not on the host. `services/api`/
-`services/inapp-gateway` also need `ports:` publishing (`3000:3000`,
-`3001:3001`) to stay reachable from the host.
+Dockerfile, args: { SERVICE: <name> } }`, `depends_on` with `condition:
+service_healthy` on whichever of `postgres`/`redis`/`kafka` it actually
+needs (see each service's own README's "Depends on") *plus* `migrate:
+{ condition: service_completed_successfully }` for every service that
+has a `DATABASE_URL` — see below — and an `environment:` block using
+the **in-network** hostnames — `postgres`, `redis`, `kafka:9092` (the
+`PLAINTEXT://kafka:9092` listener — a containerized service, unlike a
+host process, talks to Kafka over the compose network, so it wants this
+listener, not `PLAINTEXT_HOST`) and `http://jaeger:4318` for tracing —
+not `localhost`, since these now run inside the compose network, not on
+the host. `services/api`/`services/inapp-gateway` also need `ports:`
+publishing (`3000:3000`, `3001:3001`) to stay reachable from the host —
+see §3.4 finding 3 for a real, machine-specific gotcha with these two.
+
+One more block beyond the ten services, not in the original plan: a
+`migrate` one-off (`build.target: migrate`, `restart: "no"`) that runs
+`prisma migrate deploy` against `$DATABASE_URL` once, before any
+DATABASE_URL-using service starts. Phase A never needed this as a
+separate step — it was run by hand, once, directly on the host (§2.3a).
+A fresh containerized stack has no such one-time step unless something
+runs it; without `migrate`, the first container to touch Postgres would
+find no schema at all.
 
 This `PLAINTEXT` vs. `PLAINTEXT_HOST` split is exactly what §2.6 found
 broken for the *host-process* side (`kafka`'s container port was
@@ -386,18 +420,127 @@ service reaches Kafka over the compose network directly, via the
 `PLAINTEXT` listener's own container port (9092), never through the
 host-published port at all.
 
-### 3.3 What this needs that Phase A doesn't
+### 3.3 What this needed that Phase A didn't
 
-- The `Dockerfile` above (new).
-- Ten new service blocks in `infra/docker-compose.yml` (new).
-- A container-appropriate env var set per service — distinct from
-  `.env.example`'s host-oriented defaults, per §3.2. Likely as inline
-  `environment:` blocks in the compose file itself (simplest, and keeps
-  `.env.example` accurate for Phase A) rather than a second `.env`
-  variant.
-- `infra/README.md` and this document updated once built, the same way
-  every other piece of this codebase documents what actually exists
-  vs. what's still ahead.
+- The `Dockerfile` (new, repo root).
+- `.dockerignore` (new, repo root) — without it, `COPY . .` in the
+  `build` stage would pull in the host's own `node_modules` (built for
+  Windows — wrong-platform native bindings, Prisma engine included) and
+  `.git`, bloating the build context for no benefit. Not called out in
+  the original plan at all; a real gap, found before it could bite by
+  checking for one before the first build rather than after a strange
+  failure.
+- `.gitattributes` (new, repo root) — `Dockerfile text eol=lf` and `*.sh
+  text eol=lf`, forcing LF regardless of this checkout's
+  `core.autocrlf=true` (see §4's existing note on why CRLF breaks both).
+- Eleven new service blocks in `infra/docker-compose.yml` (ten app
+  services + `migrate`; new).
+- A container-appropriate env var set per service, inline in each
+  compose block per §3.2 (keeps `.env.example` accurate for Phase A
+  rather than adding a second `.env` variant).
+
+### 3.4 Executed — results (2026-09-07)
+
+Phase B has actually been run: all ten images built, all ten containers
+plus `migrate` started against the same live Postgres/Kafka/Redis/Jaeger
+from §2.6, nine of ten smoke tests passed from the host and the tenth
+(`api`) confirmed passing from inside its own container (see finding 3).
+Three real bugs found, all fixed — none of this was hypothetical.
+
+**1. Alpine ships no OpenSSL, and Prisma's query engine needs it.**
+`prisma generate`'s postinstall (the `build` stage) ran without error
+either way, which is what made this easy to miss — but silently
+defaulted to the wrong engine (`prisma:warn Prisma failed to detect the
+libssl/openssl version to use... Defaulting to "openssl-1.1.x"`), and
+the `migrate` stage's `prisma migrate deploy` then failed outright:
+`Error: Could not parse schema engine response: SyntaxError: Unexpected
+token 'E', "Error load"... is not valid JSON` — the engine binary had
+nothing to link against. **Fixed:** `RUN apk add --no-cache openssl` in
+both the `build` stage (so `prisma generate` detects the right engine)
+and the `runtime` stage (every `services/*` process loads this same
+query engine at request time, not just at generate time). The classic,
+well-documented Prisma-on-Alpine gap — missed here because §3.1's
+original plan never actually ran anything, just read `pnpm --help
+deploy`.
+
+**2. `pnpm deploy` does not work on this repo, in either mode.** The
+default (non-legacy) deploy refuses to run at all:
+`[ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE] ... we only deploy from
+workspaces that have "inject-workspace-packages=true" set`. Setting
+that — the suggested fix — turned out to be the wrong direction: it has
+to be active back at the `pnpm install` step, and doing that
+repo-wide (a committed `.npmrc`) would also change how *host*
+development links workspace packages, from symlinks to copies — a
+`pnpm -w build` would stop showing up to an already-running process
+immediately, a real regression for Phase A's whole workflow. Scoping it
+to just the Docker build's install step instead hit a second wall:
+`pnpm install --frozen-lockfile` then refuses, because the *lockfile
+itself* records which mode it was generated in
+(`[ERR_PNPM_LOCKFILE_CONFIG_MISMATCH] ... "settings.injectWorkspacePackages"
+... doesn't match the value found in the lockfile`) — there's no way to
+flip this on for one install without either committing it or dropping
+`--frozen-lockfile`. Falling back to `--legacy` (pnpm's suggested
+alternative, and the one that doesn't need the injection setting at
+all) gets further — it does copy workspace packages by value instead of
+symlinking — but then fails on its own: re-running
+`packages/infra-postgres`'s `postinstall` (`prisma generate`) inside the
+fresh, standalone target directory it builds fails outright (`Error:
+Command failed with exit code 1: npm i @prisma/client@5.22.0 --silent`),
+a bug in pnpm's legacy deploy implementation itself, not something this
+repo's config can route around. **Fixed** by abandoning `pnpm deploy`
+entirely: the `runtime` stage now `COPY --from=build /repo .`s the whole
+already-built workspace and sets `WORKDIR` to just the one service being
+run. Bigger images (all ten services' code and every devDependency, not
+just the one running) — a real, documented tradeoff, not a hidden one —
+but everything in it was actually built and started, unlike the minimal
+version, which never got past `RUN pnpm deploy`.
+
+**3. Machine-specific: Windows/WSL2 can silently steal a published
+container port.** `services/api`'s smoke test, run from the host against
+`http://localhost:3000`, failed with `404 !== 201` — but the response
+body was a *Ruby-on-Rails* `ActionController::RoutingError` page, not
+this codebase's Fastify 404 handler. `services/api`'s own container was
+completely healthy the whole time (confirmed via `docker compose exec
+api netstat`: `0.0.0.0:3000` bound to the container's own `node`
+process; confirmed further by running `scripts/smoke-test.mjs` *from
+inside* the container itself, which passed cleanly). The actual cause:
+`Get-NetTCPConnection -LocalPort 3000` on the host showed `wslrelay.exe`
+(WSL2's own port-forwarding relay, distinct from Docker Desktop's own
+`com.docker.backend.exe`) also bound to that port — some unrelated
+process in a different WSL2 distro on this machine was independently
+listening on container-port-equivalent 3000, and Windows' relay layer
+routed the smoke test's request to *that*, not to Docker's own forward
+into this compose network. Port 3001 (`inapp-gateway`) showed the same
+`wslrelay.exe`/`com.docker.backend.exe` pairing in
+`Get-NetTCPConnection` but had no real conflict — that pairing alone is
+normal Docker-Desktop-on-WSL2 plumbing, not a symptom; `3000`'s actual
+second real listener was the anomaly. **Not fixed in the repo** — there
+is nothing in this codebase to fix; `infra/docker-compose.yml` keeps
+publishing `3000`/`3001`, the canonical ports `.env.example` and every
+other doc already assume. **Workaround, machine-specific:** before
+trusting a `curl`/smoke-test failure against a published container port
+on Windows, check `Get-NetTCPConnection -LocalPort <port> -State
+Listen` for more than Docker's own two processes; if something else is
+there, either stop it or remap that one service's host port in a local
+compose override (`ports: ["3010:3000"]`) rather than assuming the
+container itself is broken.
+
+All ten smoke tests pass against the containerized stack (nine
+run from the host normally; `api`'s from inside its own container, per
+finding 3; `scheduler`'s hit the same pre-existing test-harness race
+documented in §2.6 — its own throwaway consumer racing the
+already-running live `scheduler` container's poller — confirmed
+via that container's own logs actually emitting the seeded row during
+the same window, same benign artifact as before, not re-litigated here).
+`pnpm -w test`/`typecheck`/`lint`/`boundaries` all still pass unit-level.
+
+### 3.5 Still ahead
+
+Once Phase B is green (it is, as of §3.4): the two multi-hop scenarios
+called out in §2.5 (a broadcast; a quiet-hours deferral that re-emits),
+by hand, against the containerized stack, as the concrete satisfaction
+of `docs/roadmap.md`'s "`docker compose up` demo works end-to-end" item.
+Not done yet.
 
 ## 4. Windows-specific things already known to bite
 
@@ -431,6 +574,19 @@ host-published port at all.
   over `Get-Content .env` setting `$env:` vars works) or add a
   lightweight loader to each `start` script if this becomes painful
   enough to justify a new dependency.
+- **Alpine's `node` image ships no OpenSSL, and Prisma's query engine
+  needs it.** See §3.4 finding 1 for the exact failure — `RUN apk
+  add --no-cache openssl` before anything Prisma-related runs, in every
+  stage that touches it (`prisma generate` at build time, the actual
+  query engine at run time).
+- **WSL2 can silently steal a published container port.** See §3.4
+  finding 3 — `wslrelay.exe` multiplexes a Windows-side port across
+  every WSL2 distro that's listening on it, Docker Desktop's own
+  containers included, so a `curl`/smoke-test failure against
+  `localhost:<published port>` isn't necessarily this stack's fault.
+  Check `Get-NetTCPConnection -LocalPort <port> -State Listen` for more
+  than Docker's own two processes before assuming the container is
+  broken.
 
 ## 5. Sequencing
 
@@ -439,12 +595,10 @@ host-published port at all.
 2. ✅ Phase A, in full, including every smoke test — done, see §2.6.
    This retires the "not yet verified against live infra" caveat on
    every merged PR this session.
-3. **Not yet done** — Phase B: write the `Dockerfile`, the compose
-   additions, rebuild everything as containers, re-run the same smoke
-   tests against the containerized stack.
-4. **Not yet done** — once Phase B is green: the two multi-hop scenarios
-   called out in §2.5 (a broadcast; a quiet-hours deferral that
-   re-emits), by hand, as the concrete satisfaction of
+3. ✅ Phase B, in full, including every smoke test — done, see §3.4.
+4. **Not yet done** — the two multi-hop scenarios called out in §2.5 (a
+   broadcast; a quiet-hours deferral that re-emits), by hand, against
+   the containerized stack, as the concrete satisfaction of
    `docs/roadmap.md`'s "`docker compose up` demo works end-to-end" item.
 
 Not covered by this plan (genuinely separate, later work — see
