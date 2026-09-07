@@ -94,6 +94,250 @@ services:
       - "4317:4317" # OTLP gRPC
       - "4318:4318" # OTLP HTTP — OTEL_EXPORTER_OTLP_ENDPOINT target
 
+  # --- Phase 1 app services (Phase B — full containerization; see
+  # docs/local-development.md#3-phase-b--full-containerization) ---
+  #
+  # All ten built from the repo-root ../Dockerfile, one shared,
+  # parameterized image (see that file's own comment). Every service
+  # here talks to infra over the compose network by container hostname
+  # (`postgres`, `redis`, `kafka:9092` — the PLAINTEXT listener, not
+  # PLAINTEXT_HOST; see the `kafka` service's own comment above) and
+  # `http://jaeger:4318` for tracing — never `localhost`, unlike Phase
+  # A's host processes and .env.example's host-oriented defaults.
+  #
+  # `migrate` applies packages/infra-postgres/prisma/migrations/ once,
+  # before any app service starts — every DATABASE_URL-using service
+  # depends on it via `condition: service_completed_successfully`, not
+  # just `depends_on: postgres`. Phase A never needed this as a separate
+  # step because it was run by hand once, directly on the host (see
+  # §2.3a); a fresh containerized stack has no such one-time step unless
+  # something runs it.
+  migrate:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: migrate
+    environment:
+      DATABASE_URL: postgresql://notification:notification@postgres:5432/notification
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      HOST: "0.0.0.0"
+      DATABASE_URL: postgresql://notification:notification@postgres:5432/notification
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  router:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: router
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://notification:notification@postgres:5432/notification
+      KAFKA_BROKERS: kafka:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  scheduler:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: scheduler
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://notification:notification@postgres:5432/notification
+      KAFKA_BROKERS: kafka:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      SCHEDULER_BUCKET: "0"
+      SCHEDULER_BUCKET_COUNT: "1"
+      SCHEDULER_CLAIM_LIMIT: "100"
+      SCHEDULER_POLL_INTERVAL_MS: "5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  fanout-expander:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: fanout-expander
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://notification:notification@postgres:5432/notification
+      KAFKA_BROKERS: kafka:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  projection-notification:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: projection-notification
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://notification:notification@postgres:5432/notification
+      KAFKA_BROKERS: kafka:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker-sms:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: worker-sms
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://notification:notification@postgres:5432/notification
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      # SMS_PROVIDER unset — mock gateway, same as Phase A (see §1).
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker-push:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: worker-push
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://notification:notification@postgres:5432/notification
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      # PUSH_PROVIDER unset — mock gateway, same as Phase A (see §1).
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker-email:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: worker-email
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://notification:notification@postgres:5432/notification
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker-inapp:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: worker-inapp
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://notification:notification@postgres:5432/notification
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  inapp-gateway:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: inapp-gateway
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: "3001"
+      HOST: "0.0.0.0"
+      REDIS_URL: redis://redis:6379
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+    depends_on:
+      redis:
+        condition: service_healthy
+
 volumes:
   postgres-data:
   redis-data:

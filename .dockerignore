@@ -1,0 +1,23 @@
+# Mirrors .gitignore, plus .git itself and IDE/editor cruft — none of
+# this belongs in the build context. Most important entry is
+# node_modules/: this repo is worked on from Windows, so a host
+# node_modules (if present) carries Prisma's Windows query-engine binary
+# and other native bindings that are simply wrong for the Linux build
+# stage — `pnpm install` inside the image is what produces a correct one,
+# and it must not find a pre-existing node_modules to (incorrectly) trust.
+node_modules/
+dist/
+build/
+generated/
+*.tsbuildinfo
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+.git/
+.gitignore
+.claude/
+.vscode/
+.idea/
