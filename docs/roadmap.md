@@ -417,13 +417,13 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
         throughput target; its output replaces every illustrative figure
         in [`architecture/scaling-strategy.md`](architecture/scaling-strategy.md)
         with a measured one
-- [ ] `docker compose up` demo works end-to-end for all four channels,
+- [x] `docker compose up` demo works end-to-end for all four channels,
       including a broadcast (Door 2 → fan-out → many recipients) and a
-      quiet-hours deferral that later re-emits — plan in
-      [`local-development.md`](local-development.md). Its Phase A
+      quiet-hours deferral that later re-emits — plan and full trail in
+      [`local-development.md`](local-development.md). Both Phase A
       (hybrid: infra in Docker, all ten services as host processes) and
       Phase B (full containerization: a shared `Dockerfile`, eleven new
-      `docker-compose.yml` service blocks) are both now done — every
+      `docker-compose.yml` service blocks) are done — every
       `scripts/smoke-test.mjs` passes against both a live host-process
       stack and the fully containerized one, and each run found and
       fixed real bugs along the way: Phase A, a broken Kafka host-port
@@ -435,8 +435,13 @@ channel-rollout phasing and no committed hosted-deployment phase yet; see
       modes, and a Windows/WSL2 host-port collision that isn't this
       repo's to fix
       ([`local-development.md#3.4`](local-development.md#34-executed--results-2026-09-07)
-      for all three). Only the two by-hand multi-hop scenarios above are
-      still ahead
+      for all three). The broadcast and quiet-hours-deferral scenarios
+      themselves are now real, reusable scripts —
+      `scripts/demo-broadcast.mjs` / `scripts/demo-quiet-hours-deferral.mjs`
+      (`pnpm demo:broadcast` / `pnpm demo:quiet-hours`) — both run clean
+      against the containerized stack on the first try, no further bugs
+      found
+      ([`local-development.md#3.5`](local-development.md#35-the-two-multi-hop-scenarios--executed-2026-09-07))
 
 ## Future work (not phased — introduce later if needed)
 

@@ -13,8 +13,9 @@ live Postgres/Kafka/Redis — no Docker in the session this was built in."
 was installed) — that caveat is retired for every service. See §2.6 for
 what that run found (two real bugs, both fixed). **Phase B has now also
 actually been run** (2026-09-07) — see §3.4 for what that found (three
-more real bugs, all fixed) and §3.5 for the by-hand multi-hop scenarios,
-still ahead.
+more real bugs, all fixed) and §3.5 for the two multi-hop demo
+scenarios, also both run successfully against the containerized stack.
+This whole document's plan is now fully executed — see §5.
 
 ## 0. What already exists vs. what doesn't
 
@@ -41,6 +42,9 @@ still ahead.
   [`docker-compose.yml`] once each has a Dockerfile and a real
   entrypoint — Phase 1, not before." That's now done; see §3.1-§3.4 for
   what it took.
+- `scripts/demo-broadcast.mjs`, `scripts/demo-quiet-hours-deferral.mjs`
+  (repo root; `pnpm demo:broadcast` / `pnpm demo:quiet-hours`) — the two
+  multi-hop scenarios from §2.5, as real reusable scripts. See §3.5.
 
 **Does not exist yet — this is the actual gap:**
 - **No `.env` file** — only `.env.example`. Never copied on a fresh
@@ -50,8 +54,6 @@ still ahead.
   every README's "Local setup" shows one service in isolation (`pnpm
   --filter X start`), correct for that document but not a fleet. Not an
   issue for Phase B — `docker compose up -d` already starts all ten.
-- **The two by-hand multi-hop demo scenarios** (§3.5) — not yet run
-  against the containerized stack.
 
 ## 1. Prerequisites
 
@@ -534,13 +536,52 @@ via that container's own logs actually emitting the seeded row during
 the same window, same benign artifact as before, not re-litigated here).
 `pnpm -w test`/`typecheck`/`lint`/`boundaries` all still pass unit-level.
 
-### 3.5 Still ahead
+### 3.5 The two multi-hop scenarios — executed (2026-09-07)
 
-Once Phase B is green (it is, as of §3.4): the two multi-hop scenarios
-called out in §2.5 (a broadcast; a quiet-hours deferral that re-emits),
-by hand, against the containerized stack, as the concrete satisfaction
-of `docs/roadmap.md`'s "`docker compose up` demo works end-to-end" item.
-Not done yet.
+Both scenarios called out in §2.5 have now been run against the live
+containerized stack, as real, reusable scripts (not one-off manual
+Kafka produces) — `scripts/demo-broadcast.mjs` and
+`scripts/demo-quiet-hours-deferral.mjs` (repo root, `pnpm demo:broadcast`
+/ `pnpm demo:quiet-hours`). Both publish onto the same topics
+Door 1/Door 2 themselves use (the same "producer library" pattern every
+`services/*/scripts/smoke-test.mjs` already uses), so they exercise the
+real multi-hop path — several services in sequence, not one in
+isolation — rather than re-testing what the per-service smoke tests
+already cover.
+
+**Broadcast** (`demo-broadcast.mjs`): seeds 1 tenant + 5 recipients,
+publishes one `BroadcastRequest` onto `events.broadcast`, and polls
+Postgres until all 5 independently-routed `NotificationRequest` rows
+reach `"sent"` — `services/fanout-expander` resolving the audience and
+expanding it, `services/router` dispatching each recipient
+independently, `services/worker-sms` delivering each through the mock
+gateway. Passed cleanly on the first run, ~3s end to end for all 5.
+
+**Quiet-hours deferral** (`demo-quiet-hours-deferral.mjs`): seeds a
+recipient with quiet hours covering "now" and ending ~2 minutes out,
+publishes one `NotificationEvent`, and asserts in two stages: first,
+that `services/router` actually deferred it — a `pending`
+`ScheduledNotification` row exists and, critically, *no*
+`NotificationRequest` row exists yet at all (deferring publishes nothing
+to the event backbone — see `RouterService.defer`'s own doc comment);
+then, after really waiting out the quiet-hours window (not shortened to
+a synthetic instant — the point is watching `services/scheduler`'s
+poller actually catch it once due), that the *same*
+`notificationRequestId` the original event carried reaches `"sent"`.
+Passed cleanly on the first run too, in just over 2 minutes (the quiet
+hours window) — no code changes needed for either scenario, since both
+were already proven at the single-service level by the existing smoke
+tests; this was about proving the seams between them, and they held.
+
+Both terminate at `"sent"`, not `"delivered"` — see `demo-broadcast.mjs`'s
+own header comment: no channel worker publishes `"delivered"` in Phase 1
+(no provider webhook exists to confirm actual carrier delivery yet;
+`services/projection-notification`'s own smoke test fabricates all three
+statuses by hand specifically to test that projection in isolation, not
+to claim workers reach it for real).
+
+This closes `docs/roadmap.md`'s "`docker compose up` demo works
+end-to-end" item — see §5.
 
 ## 4. Windows-specific things already known to bite
 
@@ -596,10 +637,10 @@ Not done yet.
    This retires the "not yet verified against live infra" caveat on
    every merged PR this session.
 3. ✅ Phase B, in full, including every smoke test — done, see §3.4.
-4. **Not yet done** — the two multi-hop scenarios called out in §2.5 (a
-   broadcast; a quiet-hours deferral that re-emits), by hand, against
-   the containerized stack, as the concrete satisfaction of
-   `docs/roadmap.md`'s "`docker compose up` demo works end-to-end" item.
+4. ✅ The two multi-hop scenarios called out in §2.5 (a broadcast; a
+   quiet-hours deferral that re-emits), against the containerized
+   stack — done, see §3.5. This closes `docs/roadmap.md`'s
+   "`docker compose up` demo works end-to-end" item.
 
 Not covered by this plan (genuinely separate, later work — see
 `docs/roadmap.md`'s "Future work" section): a hosted deployment, load
