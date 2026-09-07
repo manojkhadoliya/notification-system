@@ -11,6 +11,12 @@ importers:
       '@eslint/js':
         specifier: ^9.15.0
         version: 9.39.5
+      '@notification-system/infra-kafka':
+        specifier: workspace:*
+        version: link:packages/infra-kafka
+      '@notification-system/infra-postgres':
+        specifier: workspace:*
+        version: link:packages/infra-postgres
       '@types/node':
         specifier: ^20.14.0
         version: 20.19.43

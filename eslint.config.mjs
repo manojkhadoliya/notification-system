@@ -16,6 +16,10 @@ export default tseslint.config(
       // the root config files above.
       "packages/*/scripts/**",
       "services/*/scripts/**",
+      // Same reason, one level up — the cross-service by-hand demo
+      // scripts (docs/local-development.md#3.5), not tied to any one
+      // package's tsconfig project graph either.
+      "scripts/**",
       ".claude/**",
     ],
   },
